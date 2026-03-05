@@ -15,11 +15,13 @@ STATIC_ENTITIES = {
     "bitcoin", "btc", "ethereum", "eth", "solana", "sol", "xrp", "tether", "usdt", "usdc",
     
     # Tổ chức & Vĩ mô (Tiếng Anh + Việt)
-    "sec", "cftc", "fbi", "doj", "fed", "ecb", "boj", "gary gensler", "cục dự trữ", "lãi suất", "cpi", "gdp", "pce", "pmi", "nonfarm",
+    "sec", "cftc", "fbi", "doj", "fed", "ecb", "boj", "snb", "gary gensler", "cục dự trữ", "lãi suất", "cpi", "gdp", "pce", "pmi", "nonfarm",
+    "thất nghiệp", "unemployment", "việc làm", "tỷ lệ", "rate", "lạm phát", "inflation", "báo cáo", "report", "dữ liệu", "data",
     "chính phủ", "chứng khoán", "hoa kỳ", "mỹ", "mĩ", "usa", "nga", "russia", "putin", "ukraine", "zelensky", "israel", "iran", 
     "palestine", "gaza", "hamas", "hezbollah", "lebanon", "li-băng", "syria", "yemen", "houthi", "iraq", "trung đông", "middle east",
     "trung quốc", "china", "bắc kinh", "beijing", "hàn quốc", "triều tiên", "bắc triều tiên", "đài loan", "taiwan", "nhật bản", "japan",
-    "pháp", "france", "đức", "germany", "anh", "uk", "eu", "liên minh châu âu", "nato", "un", "liên hợp quốc",
+    "pháp", "france", "đức", "germany", "anh", "uk", "thụy sĩ", "switzerland", "châu âu", "eurozone",
+    "eu", "liên minh châu âu", "nato", "un", "liên hợp quốc",
     
     # Chiến tranh / Xung đột
     "chiến tranh", "xung đột", "tên lửa", "không kích",

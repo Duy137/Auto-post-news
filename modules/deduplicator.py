@@ -7,11 +7,11 @@ from typing import List, Set, Dict, Any, Tuple, Optional
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models import Article
+from modules.state_manager import get_recent_articles_for_dedup, create_event_root, log_article_event_root
 
 logger = logging.getLogger(__name__)
 
 # Config cho deduplicator
-HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "seen_articles.json")
 SIMILARITY_THRESHOLD = 0.45  # Khoảng 45% trùng lặp từ khóa chính là đủ để coi là duplicate vì ta đã bỏ stopwords
 
 import uuid
@@ -46,30 +46,6 @@ def match_historical_roots(new_article: Dict[str, Any], recent_articles: List[Di
                 best_created_ts = seen_art.get("root_created_ts", seen_art.get("published_ts", 0))
                 
     return best_root_id, best_created_ts
-
-def load_history() -> Dict[str, Any]: #Chịu trách nhiệm Load (đọc) dữ liệu xuống ổ cứng
-    """Load lịch sử các bài đã quét."""
-    if not os.path.exists(HISTORY_FILE):
-        return {"seen_ids": [], "recent_articles": []}
-    
-    try:
-        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading history file: {e}")
-        return {"seen_ids": [], "recent_articles": []}
-
-def save_history(history: Dict[str, Any], max_history: int = 2000): #Hàm Save tích hợp cơ chế "Rolling Window" - chỉ bo bo giữ lại dòng đuôi 2000 bản ghi mới nhất.
-    """Lưu trữ ID và Titles, giữ size file không bị phình to (Rolling window)."""
-    # Keep only the latest `max_history` items
-    history["seen_ids"] = history["seen_ids"][-max_history:]
-    history["recent_articles"] = history["recent_articles"][-max_history:]
-    
-    try:
-        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error(f"Error saving history file: {e}")
 
 def get_words(text: str) -> Set[str]: #Giặt sạch văn bản. Ví dụ chuyền vào "Bitcoin, hit $100k!!", nó xóa sạch dấu câu, viết thường, cắt cụm, bỏ từ ngắn, trả ra {"bitcoin", "100k"}
     """Extract set các từ khóa đã lowercase từ chuỗi, bỏ qua dấu câu."""
@@ -114,19 +90,16 @@ def deduplicate_articles(articles: List[Article]) -> List[Article]:
     """
     logger.info(f"Starting Event-Level Clustering for {len(articles)} articles.")
     
-    history_data = load_history()
-    seen_ids = set(history_data.get("seen_ids", []))
-    recent_articles = history_data.get("recent_articles", [])
+    # Kéo lịch sử từ SQLite (articles table) thay vì file JSON mồ côi
+    recent_articles = get_recent_articles_for_dedup(hours=120)
     
     similarity_engine = JaccardSimilarity()
     
     unique_articles: List[Article] = []
     
     for article in articles:
-        # 1. HARD DEDUP
-        if article["id"] in seen_ids:
-            logger.debug(f"[Hard Dedup] Bỏ qua bài đã có ID: {article['title']}")
-            continue
+        # Note: Phase 1 (Insert) đã tự loại bỏ bài trùng ID nhờ SQLite UNIQUE Constraint,
+        # Nên ở đây chúng ta bỏ qua màng lọc seen_ids.
             
         # 2. EVENT-LEVEL CLUSTERING
         is_clustered = False
@@ -154,7 +127,6 @@ def deduplicate_articles(articles: List[Article]) -> List[Article]:
                     break
 
         if is_clustered:
-            seen_ids.add(article["id"]) 
             logger.debug(f"[Event Cluster] Gom bài '{article['title']}' vào Cụm hiện tại.")
             continue
             
@@ -168,10 +140,14 @@ def deduplicate_articles(articles: List[Article]) -> List[Article]:
         article["root_created_ts"] = root_created_ts
         article["cluster_size"] = 1
         
+        # Ghi nhận root_id mới xuống DB
+        create_event_root(root_id, article["title"])
+        log_article_event_root(article["id"], root_id)
+        
         # Passed all filters -> Trở thành Lead Article của Cụm
         unique_articles.append(article)
         
-        seen_ids.add(article["id"])
+        # Bổ sung bài này vào recent window loop (tránh query DB liên tục)
         recent_articles.append({
             "title": article["title"],
             "link": article["link"],
@@ -180,9 +156,6 @@ def deduplicate_articles(articles: List[Article]) -> List[Article]:
             "root_created_ts": root_created_ts
         })
         
-    history_data["seen_ids"] = list(seen_ids)
-    history_data["recent_articles"] = recent_articles
-    save_history(history_data)
     
     logger.info(f"Phase 2 Complete: Formed {len(unique_articles)} Event Clusters (Lead Articles).")
     return unique_articles
@@ -231,5 +204,3 @@ if __name__ == "__main__":
     print("\n--- OUTPUT ARTICLES (UNIQUE ONLY) ---")
     for a in results:
         print(f"✅ {a['title']}")
-        
-    print("\n(Check file data/seen_articles.json to view memory state)")

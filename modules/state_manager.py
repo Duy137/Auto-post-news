@@ -329,6 +329,20 @@ def log_article_event_root(article_id: str, root_id: str):
         conn.execute('UPDATE articles SET event_root_id = ? WHERE id = ?', (root_id, article_id))
         conn.commit()
 
+def get_recent_articles_for_dedup(hours: int = 120) -> List[Dict[str, Any]]:
+    """Lấy danh sách các bài viết gần đây kèm theo event_root_id để phục vụ Deduplicator Phase 2."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f'''
+            SELECT id, canonical_url as link, title, source_name, event_root_id, 
+                   CAST(strftime('%s', created_at) AS INTEGER) as published_ts,
+                   CAST(strftime('%s', created_at) AS INTEGER) as root_created_ts
+            FROM articles
+            WHERE created_at >= datetime('now', '-{hours} hours') 
+            AND event_root_id IS NOT NULL
+        ''')
+        return [dict(row) for row in cursor.fetchall()]
+
 # ==========================================
 # EXPRESS LANE: HARD DEDUPLICATION (PHASE 2)
 # ==========================================

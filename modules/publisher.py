@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tweepy
 
 from models import Article, PublishResult, PlatformResult
-from config import PLATFORM_MAPPING, TWITTER_CONFIG, TELEGRAM_CONFIG, FACEBOOK_CONFIG, POSTED_TWEETS_FILE
+from config import PLATFORM_MAPPING, TWITTER_CONFIG, TELEGRAM_CONFIG, FACEBOOK_CONFIG
 import modules.state_manager as sm
 
 logger = logging.getLogger(__name__)
@@ -40,8 +40,8 @@ def truncate_tweet_safely(text: str, target_len: int, hard_max_len: int) -> str:
             truncated = truncated[:-3] + "..."
     return truncated
 
-def build_content(article: Article, platform: str) -> str:
-    """Xây dựng format văn bản riêng cho từng kênh dựa vào Structured Output của LLM."""
+def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
+    """Xây dựng format văn bản riêng cho từng kênh và luồng (RSS vs EXPRESS)."""
     struct = article.get("structured_content", {})
     fallback = article.get("tweet_content", "")
     
@@ -54,15 +54,23 @@ def build_content(article: Article, platform: str) -> str:
         # Fallback to pure string if LLM prompt parser failed
         if platform == "twitter":
             return fallback
-        return f"{fallback}\n\n🔗 {link}"
+        if lane == "EXPRESS":
+            return f"🚨 {fallback}"
+        return f"📝 {fallback}\n\n🔗 {link}"
         
     if platform == "twitter":
         content = f"{headline}\n\n{summary}\n\n{hashtags}"
         return truncate_tweet_safely(content, TWITTER_CONFIG["target_length"], TWITTER_CONFIG["hard_max_length"])
     elif platform == "telegram":
-        return f"🔥 <b>{headline}</b>\n\n{summary}\n\n{hashtags}\n\n🔗 <a href='{link}'>Đọc bài gốc</a>"
+        if lane == "EXPRESS":
+            return f"🚨 <b>{headline}</b>\n\n{summary}\n\n{hashtags}"
+        # RSS Default
+        return f"📝 <b>{headline}</b>\n\n{summary}\n\n{hashtags}\n\n🔗 <a href='{link}'>Đọc bài gốc</a>"
     elif platform == "facebook":
-        return f"🔥 {headline}\n\n{summary}\n\n{hashtags}\n\n🔗 {link}"
+        if lane == "EXPRESS":
+            return f"🚨 {headline}\n\n{summary}\n\n{hashtags}"
+        # RSS Default
+        return f"📝 {headline}\n\n{summary}\n\n{hashtags}\n\n🔗 {link}"
     return fallback
 
 # --- PUBLISHERS PLUGIN REGISTRY ---
@@ -81,8 +89,8 @@ def get_twitter_client(is_dry_run: bool):
         )
     return _twitter_client
 
-def publish_to_twitter(article: Article, is_dry_run: bool) -> PlatformResult:
-    content = build_content(article, "twitter")
+def publish_to_twitter(article: Article, is_dry_run: bool, lane: str = "RSS") -> PlatformResult:
+    content = build_content(article, "twitter", lane)
     if is_dry_run:
         logger.info(f"[DRY RUN - TWITTER] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
         return {"success": True, "post_id": f"mock_tw_{int(time.time())}", "error": None}
@@ -106,8 +114,8 @@ def publish_to_twitter(article: Article, is_dry_run: bool) -> PlatformResult:
             
     return {"success": False, "post_id": None, "error": "Max retries exceeded"}
 
-def publish_to_telegram(article: Article, is_dry_run: bool) -> PlatformResult:
-    content = build_content(article, "telegram")
+def publish_to_telegram(article: Article, is_dry_run: bool, lane: str = "RSS") -> PlatformResult:
+    content = build_content(article, "telegram", lane)
     if is_dry_run:
         logger.info(f"[DRY RUN - TELEGRAM] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
         return {"success": True, "post_id": f"mock_tg_{int(time.time())}", "error": None}
@@ -129,8 +137,8 @@ def publish_to_telegram(article: Article, is_dry_run: bool) -> PlatformResult:
         logger.error(f"Telegram API Error: {e}")
         return {"success": False, "post_id": None, "error": str(e)}
 
-def publish_to_facebook(article: Article, is_dry_run: bool) -> PlatformResult:
-    content = build_content(article, "facebook")
+def publish_to_facebook(article: Article, is_dry_run: bool, lane: str = "RSS") -> PlatformResult:
+    content = build_content(article, "facebook", lane)
     if is_dry_run:
         logger.info(f"[DRY RUN - FACEBOOK] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
         return {"success": True, "post_id": f"mock_fb_{int(time.time())}", "error": None}
@@ -202,7 +210,7 @@ def publish_all_platforms(articles: List[Article], source_lane: str = "RSS") -> 
                 continue
                 
             try:
-                res = publisher_func(article, is_dry_run)
+                res = publisher_func(article, is_dry_run, source_lane)
                 platform_results[platform_name] = res
                 if res["success"]:
                     sm.mark_event_published(event_fp, platform_name, source_lane)

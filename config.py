@@ -273,7 +273,7 @@ PROMPT_TEMPLATES = {
         "Rules:\n"
         "- Vietnamese only.\n"
         "- Focus on the core event.\n"
-        "- Be fast, concise, urgent. Use 🚨.\n"
+        "- Be fast, concise, urgent.\n"
         "- Do NOT invent facts.\n"
         "- If crypto-related, add one short possible market implication.\n"
         "- Use cautious wording: 'có thể', 'thị trường có thể phản ứng'.\n"
@@ -366,7 +366,3 @@ RSS_LOOP_INTERVAL = 120 * 60 # 15 minutes by default
 
 # Thư mục chứa Data
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-
-# File định dạng JSON lưu trữ các ID bài báo đã publish thành công lên Twitter
-POSTED_TWEETS_FILE = os.path.join(DATA_DIR, "posted_tweets.json")
-

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from telethon import TelegramClient, events
 from config import EXPRESS_CONFIG
 from modules.state_manager import check_and_insert_express_seen, check_recent_topic, insert_recent_topic
@@ -134,7 +135,7 @@ class ExpressListener:
             return
             
         # Phase 8: Minimum Time Gap (Configurable Throttle)
-        current_time = loop.time()
+        current_time = time.time()
         time_since_last_publish = current_time - self.last_publish_time
         min_gap_sec = ORCHESTRATION_CONFIG.get("express_throttle_minutes", 3) * 60.0
         if time_since_last_publish < min_gap_sec:
@@ -146,7 +147,7 @@ class ExpressListener:
             
         # Phase 6 & 8: LLM Summarize & Publish (With Delayed Retry)
         article_mock = {
-            "id": f"express_{int(loop.time())}",
+            "id": f"express_{int(time.time())}",
             "title": "Telegram Breaking News",
             "summary": message_text,
             "source_name": self.source_channel,
@@ -167,7 +168,8 @@ class ExpressListener:
                 
             # 6.1: Call LLM
             logger.info(f"🧠 [EXPRESS LLM] Sending to LLM for rewrite (Attempt {attempt})...")
-            llm_result = await loop.run_in_executor(None, call_llm_with_retry, system_prompt, user_prompt)
+            loop_instance = asyncio.get_running_loop()
+            llm_result = await loop_instance.run_in_executor(None, call_llm_with_retry, system_prompt, user_prompt)
             
             if not llm_result:
                 logger.error("❌ [EXPRESS LLM] Failed to generate summary in this attempt.")
@@ -181,14 +183,14 @@ class ExpressListener:
             
             # 6.2: Publish Omni-channel
             logger.info("🚀 [EXPRESS PUBLISH] Firing to Publisher Engine...")
-            results = await loop.run_in_executor(None, publish_all_platforms, [article_mock], "EXPRESS")
+            results = await loop_instance.run_in_executor(None, publish_all_platforms, [article_mock], "EXPRESS")
             
             # 6.3: Post-Publish Check
             is_published = any(p.get("success") for p in results[0]["results"].values())
             if is_published:
-                 self.last_publish_time = loop.time() # Update Throttle Control
+                 self.last_publish_time = time.time() # Update Throttle Control
                  logger.info(f"✅ [EXPRESS SUCCESS] Published! Inserting Fingerprint '{fingerprint_signature}' to lock 60m window.")
-                 await loop.run_in_executor(None, insert_recent_topic, fingerprint_signature, 'EXPRESS')
+                 await loop_instance.run_in_executor(None, insert_recent_topic, fingerprint_signature, 'EXPRESS')
                  return # Thoát khỏi hàm hoàn toàn
             else:
                  logger.error(f"❌ [EXPRESS FAILED] Publish engines failed on attempt {attempt}.")
