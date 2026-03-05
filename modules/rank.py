@@ -35,31 +35,57 @@ def get_adaptive_keyword_weight(keyword: str, base_weight: float, kw_freqs: Dict
     penalty = 1.0 / math.log10(freq + 10)
     return base_weight * penalty
 
-def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, int]) -> Tuple[float, List[str]]:
-    """Tính Keyword Score adaptive (giảm điểm nếu từ xuất hiện quá nhiều trong 24h)."""
-    text = clean_text(title + " " + summary)
-    words = set(text.split())
+def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, int]) -> Tuple[float, float, List[str]]:
+    """Tính Keyword Score adaptive bằng Regex Boundary. Trả về (Positive_Score, Penalty_Score, List_Words)."""
+    text = f"{title} {summary}".lower()
     
-    score = 0.0
+    positive_score = 0.0
+    penalty_score = 0.0
     found_keywords = []
     
+    # 1. Quét các rổ từ khóa tiêu chuẩn
     for cat, base_w in SCORING_WEIGHTS["keyword_caps"].items():
-        for k in SCORING_WEIGHTS["keyword_categories"][cat]:
-            if k in words:
-                w = get_adaptive_keyword_weight(k, base_w, kw_freqs)
-                score = max(score, w) # Lấy từ mạnh nhất sau khi scale
+        cat_score = 0.0
+        for k in SCORING_WEIGHTS["keyword_categories"].get(cat, []):
+            # Dùng regex word boundary để tránh nhận diện sai (ví dụ: "price.analysis" hay "priced")
+            pattern = r"\b" + re.escape(k) + r"\b"
+            if re.search(pattern, text):
+                w = get_adaptive_keyword_weight(k, abs(base_w), kw_freqs)
+                # Tích lũy điểm trong rổ
+                if base_w > 0:
+                    cat_score += w
+                else:
+                    cat_score -= w # Trừ điểm mềm (Penalty)
                 found_keywords.append(k)
-                
-    return score, found_keywords
+        
+        # Áp dụng Giới hạn Trần (Cap) cho từng rổ để tránh lạm phát
+        if base_w > 0:
+            positive_score += min(cat_score, base_w)
+        else:
+            penalty_score += max(cat_score, base_w) # base_w là số âm (vd: -6.0)
+
+    # 2. Quét Compound Tech Regexes (Công nghệ Tài sản lõi)
+    compound_weight = SCORING_WEIGHTS.get("compound_tech_weight", 5.0)
+    for pattern in SCORING_WEIGHTS.get("compound_tech_regexes", []):
+        if re.search(pattern, text):
+            positive_score += compound_weight
+            found_keywords.append(f"TECH_COMPOUND_MATCH")
+            break # Chỉ thưởng 1 lần cho cụm công nghệ để tránh lạm phát
+
+    return positive_score, penalty_score, found_keywords
 
 def calc_editorial_verb_score(title: str) -> float:
-    """Lấy điểm trọng số cao nhất của động từ mạnh xuất hiện trong Title."""
-    words = clean_text(title).split()
-    max_score = 0.0
+    """Lấy điểm trọng số cộng dồn của các động từ hành động Vĩ mô."""
+    text = title.lower()
+    total_verb_score = 0.0
+    verb_cap = 4.0 # Giới hạn tối đa cho nhóm Động từ
+    
     for verb, weight in SCORING_WEIGHTS["editorial_verbs"].items():
-        if verb in words:
-            max_score = max(max_score, weight)
-    return max_score
+        pattern = r"\b" + re.escape(verb) + r"\b"
+        if re.search(pattern, text):
+            total_verb_score += weight
+            
+    return min(total_verb_score, verb_cap)
 
 SHOCK_VERBS = {"halt", "exploit", "breach", "emergency", "freeze", "fbi", "raid", "bankruptcy", "bankrupt"}
 
@@ -145,6 +171,9 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
     kw_freqs = get_keyword_frequencies_24h()
     keywords_to_log = []
     
+    # [NEW] Regex Pattern để diệt gọn bài phân tích giá / rác đầu cơ
+    SPECULATION_REJECT_PATTERN = r"(price\s+target|price\s+prediction|technical\s+analysis|bullish|bearish|support\s+level|resistance\s+level|analyst\s+predicts?|forecast\s+price)"
+    
     # 1. Tính toán Cross-Source Momentum (Global view của mảng đợt này)
     momentum_map = detect_cross_source_momentum(articles)
     base_score = SCORING_WEIGHTS["base_score"]
@@ -154,8 +183,19 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
     
     # 2. Xếp hạng từng bài
     for art in articles:
+        text_lower = (art["title"] + " " + art.get("summary", "")).lower()
+        
+        # [NEW] HARD REJECT: Kiểm tra mẫu Câu Đầu Cơ Giá
+        speculation_match = re.search(SPECULATION_REJECT_PATTERN, text_lower)
+        if speculation_match:
+            logger.warning(f"🛑 [FILTERED] Article '{art['id']}': Hard dropped due to Speculation Pattern Detected: '{speculation_match.group(1)}'")
+            art["score"] = -999.0
+            art["score_detail"] = {"error": "Speculation Hard Reject"}
+            continue # Vứt bài này ngay lập tức, không tốn CPU tính điểm nữa
+            
         # A. Base Impacts
-        kw_score, words_found = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
+        positive_kw_score, penalty_kw_score, words_found = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
+        kw_score = positive_kw_score + penalty_kw_score # kw_score nay chứa cả thưởng và phạt (đã cap)
         keywords_to_log.extend(words_found)
         
         verb_score = calc_editorial_verb_score(art["title"])
@@ -193,8 +233,19 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # F. Decay
         decay_mult = calc_directional_time_decay(art.get("root_created_ts", art.get("published_ts", current_ts)), current_ts, momentum_delta)
         
-        # G. FINAL SCORE formula (V2.3 FINAL)
+        # G. FINAL SCORE formula (V3.0 Deterministic)
         total_score = editorial_score * viral_potential * decay_mult
+        
+        # [NEW] Tích hợp chi tiết breakdown_log để in ra Console cho dễ debug
+        breakdown_log = (
+            f"\n📊 [RANKING] Article '{art['title'][:40]}...':\n"
+            f"  - MACRO/TECH_SCORE (+): {positive_kw_score:.2f} (Keywords: {words_found})\n"
+            f"  - EDITORIAL_SCORE  (+): {verb_score:.2f}\n"
+            f"  - PENALTY          (-): {penalty_kw_score:.2f}\n"
+            f"  - VIRAL/SHOCK_MULT (x): {viral_potential:.2f} (Shock:{shock_score:.1f}, Momentum:{momentum_score:.1f})\n"
+            f"  - DECAY_MULT       (x): {decay_mult:.2f}\n"
+            f"  - SOURCE_CRED      (x): {src_cred:.2f}\n"
+        )
         
         # Phase 7: RSS Cooldown Suppression Guard
         # Extract vân tay từ tựa đề RSS. Nếu trùng topic vừa đăng trên Telegram/RSS trong 60 phút qua -> Phạt điểm.
@@ -213,7 +264,8 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # Điền Score Detail
         art["score_detail"] = {
             "base_score": base_score,
-            "adaptive_keyword_score": round(kw_score, 2),
+            "positive_keyword_score": round(positive_kw_score, 2),
+            "penalty_keyword_score": round(penalty_kw_score, 2),
             "editorial_verb_score": verb_score,
             "cross_source_momentum_score": momentum_score,
             "source_credibility": src_cred,
@@ -226,6 +278,14 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
             "total_score": round(total_score, 2)
         }
         art["score"] = art["score_detail"]["total_score"]
+        
+        # Bổ sung dòng Total Score vào Breakdown Log và in ra Console
+        breakdown_log += f"  => FINAL_SCORE    : {art['score']:.2f}\n"
+        if art["score"] > 8.0: # Chỉ in log chi tiết các bài khá khẩm để tránh rác console
+            logger.info(breakdown_log)
+        
+    # Lọc bỏ các bài bị Hard Reject (-999.0) khỏi danh sách để tránh lọt vào Selector
+    articles = [a for a in articles if a.get("score", 0) > -500.0]
         
     # Log keywords for future weighting
     if keywords_to_log:

@@ -16,8 +16,10 @@ STATIC_ENTITIES = {
     
     # Tổ chức & Vĩ mô (Tiếng Anh + Việt)
     "sec", "cftc", "fbi", "doj", "fed", "ecb", "boj", "gary gensler", "cục dự trữ", "lãi suất", "cpi", "gdp", "pce", "pmi", "nonfarm",
-    "chính phủ", "chứng khoán", "hoa kỳ", "mỹ", "mĩ", "usa", "nga", "russia", "ukraine", "israel", "iran", 
-    "trung quốc", "china", "hàn quốc", "bắc triều tiên", "đài loan", "taiwan",
+    "chính phủ", "chứng khoán", "hoa kỳ", "mỹ", "mĩ", "usa", "nga", "russia", "putin", "ukraine", "zelensky", "israel", "iran", 
+    "palestine", "gaza", "hamas", "hezbollah", "lebanon", "li-băng", "syria", "yemen", "houthi", "iraq", "trung đông", "middle east",
+    "trung quốc", "china", "bắc kinh", "beijing", "hàn quốc", "triều tiên", "bắc triều tiên", "đài loan", "taiwan", "nhật bản", "japan",
+    "pháp", "france", "đức", "germany", "anh", "uk", "eu", "liên minh châu âu", "nato", "un", "liên hợp quốc",
     
     # Chiến tranh / Xung đột
     "chiến tranh", "xung đột", "tên lửa", "không kích",

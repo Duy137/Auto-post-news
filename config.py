@@ -141,13 +141,15 @@ RSS_SOURCES: List[RssSource] = [
 
 class KeywordCategoryConfig(TypedDict):
     urgent: List[str]
-    major: List[str]
-    tech: List[str]
+    macro_politics: List[str]
+    major_tech: List[str]
+    price_analysis: List[str]
 
 class KeywordCapConfig(TypedDict):
     urgent: float
-    major: float
-    tech: float
+    macro_politics: float
+    major_tech: float
+    price_analysis: float
 
 class ScoringWeights(TypedDict):
     base_score: float
@@ -166,33 +168,41 @@ SCORING_WEIGHTS: ScoringWeights = {
     # Hàm mũ y=e^(-lambda*x). Lambda 0.05 nghĩa là sau 14h điểm giảm còn 1/2.
     "time_decay_lambda_per_hour": 0.05, 
     
-    # Từ khóa chia làm 3 rổ. Bài chỉ ăn Max-cap từ 1 rổ.
+    # Từ khóa chia làm 4 rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {
-        "urgent": ["hack", "scam", "breach", "sues", "arrested", "bankrupt"],
-        "major": ["bitcoin", "ethereum", "sec", "etf", "ath", "record"],
-        "tech": ["update", "release", "framework", "upgrade", "integration"]
+        "urgent": ["hack", "scam", "breach", "sues", "arrest", "bankrupt"],
+        "macro_politics": ["regulation", "bill", "legislation", "ban", "approval", "court", "sec", "regulator", "government", "policy", "lawsuit", "fed", "inflation", "cpi", "rate", "etf"],
+        "major_tech": ["mainnet", "protocol", "hard fork", "network", "roadmap", "partnership", "upgrade", "integration", "launch"],
+        "price_analysis": ["predict", "forecast", "analysis", "price prediction", "target", "analyst", "bullish", "bearish"]
     },
     
-    # Điểm cộng của từng rổ
+    # Điểm Trần (Cap) của từng rổ để tránh lạm phát
     "keyword_caps": {
         "urgent": 10.0,
-        "major": 5.0,
-        "tech": 2.0
+        "macro_politics": 12.0,
+        "major_tech": 10.0,
+        "price_analysis": -6.0  # Điểm âm (Soft Penalty)
     },
     
-    # Dấu hiệu Action Event
+    # Compound Regex for specific tech assets (Sử dụng trong rank.py, cấu hình ở đây cho dễ quản lý)
+    "compound_tech_regexes": [
+        r"bitcoin.*(upgrade|protocol|fork|network)",
+        r"ethereum.*(upgrade|hard fork|mainnet|eip|protocol)"
+    ],
+    "compound_tech_weight": 5.0, # Điểm cộng thêm nếu khớp compound tech
+    
+    # Dấu hiệu Action Event (Trọn bộ Vĩ mô & Công nghệ)
     "editorial_verbs": {
-        "bankrupt": 5.0,
-        "hacked": 4.5,
-        "bans": 4.0,
-        "halts": 4.0,
-        "approves": 3.0,
-        "plummets": 3.0,
-        "surges": 3.0,
-        "acquires": 2.0,
-        "raises": 1.5,
-        "launches": 1.5,
-        "updates": 0.5
+        "announce": 4.0,
+        "approve": 4.0,
+        "pass": 4.0,
+        "enforce": 4.0,
+        "file": 3.5,
+        "propose": 3.5,
+        "launch": 3.0,
+        "upgrade": 3.0,
+        "integrate": 3.0,
+        "adopt": 3.0
     },
     
     # Cộng thêm nếu bài nằm trong rổ chủ đề đang rầm rộ
@@ -272,17 +282,17 @@ PROMPT_TEMPLATES = {
         "HEADLINE: <title>|||SUMMARY: <1-2 lines>|||IMPACT: <short implication or 'Chưa rõ tác động'>"
     ),
     "RSS": (
-        "You are a neutral crypto news editor.\n"
+        "You are a neutral macro and technology news reporter for the crypto ecosystem.\n"
         "Analyze the provided article (title + summary).\n"
         "Rules:\n"
         "- Vietnamese only.\n"
-        "- Use only given information.\n"
-        "- Do NOT invent facts.\n"
-        "- Neutral, objective tone.\n"
-        "- Add brief educational market context if relevant.\n"
-        "- Use cautious wording (có thể, thường dẫn tới...).\n"
+        "- Use only given information. Do NOT invent facts.\n"
+        "- Tone guideline: factual, neutral, event-focused, no market commentary.\n"
+        "- STRICT: Do not speculate about future price direction. Do not give investment advice.\n"
+        "- Focus on reporting the event itself rather than interpreting market movements.\n"
+        "- Impact must describe possible ecosystem implications (e.g., regulatory clarity, institutional adoption, network development), not price movement.\n"
         "Return exactly:\n"
-        "HEADLINE: <short title>|||SUMMARY: <2-3 sentences>|||IMPACT: <market context or 'Chưa rõ tác động'>|||HASHTAGS: <1-4 tags>"
+        "HEADLINE: <short title>|||SUMMARY: <2-3 sentences>|||IMPACT: <ecosystem context or 'Chưa rõ tác động'>|||HASHTAGS: <1-4 tags>"
     )
 }
 

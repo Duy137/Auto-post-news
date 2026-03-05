@@ -12,37 +12,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tweepy
 
 from models import Article, PublishResult, PlatformResult
-from config import PUBLISHING_PLATFORMS, TWITTER_CONFIG, TELEGRAM_CONFIG, FACEBOOK_CONFIG, POSTED_TWEETS_FILE
+from config import PLATFORM_MAPPING, TWITTER_CONFIG, TELEGRAM_CONFIG, FACEBOOK_CONFIG, POSTED_TWEETS_FILE
+import modules.state_manager as sm
 
 logger = logging.getLogger(__name__)
 
 # --- STATE MANAGEMENT ---
-def load_posted_history() -> dict:
-    """Load danh sách ID các bài báo đã được đăng và trên nền tảng nào."""
-    if not os.path.exists(POSTED_TWEETS_FILE):
-        return {}
-    try:
-        with open(POSTED_TWEETS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Support legacy format migration if needed
-            if "posted_article_ids" in data:
-                return {pid: ["twitter"] for pid in data["posted_article_ids"]}
-            return data.get("posted_articles", {})
-    except Exception as e:
-        logger.error(f"Error loading posted history: {e}")
-        return {}
-
-def save_posted_history(posted_dict: dict):
-    """Lưu danh sách ID và platform để chống Duplicate Posting."""
-    if len(posted_dict) > 5000:
-        keys_to_keep = list(posted_dict.keys())[-5000:]
-        posted_dict = {k: posted_dict[k] for k in keys_to_keep}
-    try:
-        os.makedirs(os.path.dirname(POSTED_TWEETS_FILE), exist_ok=True)
-        with open(POSTED_TWEETS_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"posted_articles": posted_dict}, f, indent=2)
-    except Exception as e:
-        logger.error(f"Error saving posted history: {e}")
+# The legacy JSON operations (load/save_posted_history) have been removed.
+# Idempotency is now handled via state_manager.py using SQLite (published_events).
 
 # --- FORMATTERS ---
 def truncate_tweet_safely(text: str, target_len: int, hard_max_len: int) -> str:
@@ -191,7 +168,6 @@ def publish_all_platforms(articles: List[Article], source_lane: str = "RSS") -> 
     if not articles:
         return results
         
-    posted_history = load_posted_history()
     is_dry_run = TWITTER_CONFIG["dry_run"] # Use master dry_run toggle for all for now
     
     source_lane = source_lane.upper()
@@ -207,14 +183,15 @@ def publish_all_platforms(articles: List[Article], source_lane: str = "RSS") -> 
 
     for idx, article in enumerate(articles):
         art_id = article["id"]
-        article_posted_platforms = posted_history.get(art_id, [])
-        platform_results: dict[str, PlatformResult] = {}
+        # Use fingerprint representing the actual entity/event payload instead of just DB id
+        event_fp = article.get("fingerprint", "") or art_id
         
+        platform_results: dict[str, PlatformResult] = {}
         at_least_one_new_success = False
 
         for platform_name in active_platforms:
-            if platform_name in article_posted_platforms:
-                logger.info(f"Idempotency Guard: Article {art_id} already posted on {platform_name}. Skipping.")
+            if sm.is_event_published(event_fp, platform_name):
+                logger.info(f"Idempotency Guard: Event {event_fp} already posted on {platform_name}. Skipping.")
                 platform_results[platform_name] = {"success": True, "post_id": "already_posted", "error": "Duplicate"}
                 continue
                 
@@ -228,20 +205,16 @@ def publish_all_platforms(articles: List[Article], source_lane: str = "RSS") -> 
                 res = publisher_func(article, is_dry_run)
                 platform_results[platform_name] = res
                 if res["success"]:
-                    article_posted_platforms.append(platform_name)
+                    sm.mark_event_published(event_fp, platform_name, source_lane)
                     at_least_one_new_success = True
             except Exception as e:
                 logger.error(f"Fatal plugin error for {platform_name}: {e}")
                 platform_results[platform_name] = {"success": False, "post_id": None, "error": str(e)}
 
-        if at_least_one_new_success:
-            posted_history[art_id] = article_posted_platforms
-            save_posted_history(posted_history)
-            
         results.append({
             "article_id": art_id,
             "results": platform_results,
-            "posted_timestamp": int(time.time()) if article_posted_platforms else None
+            "posted_timestamp": int(time.time()) if at_least_one_new_success else None
         })
         
         if at_least_one_new_success and not is_dry_run and idx < len(articles) - 1:

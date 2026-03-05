@@ -155,11 +155,12 @@ async def run_rss_pipeline_loop(logger):
             logger.info(f"Posted (Phase 6)    : {metrics['posted_count']} successful, {metrics['failed_count']} failed")
             logger.info("==================================\n")
     
-            # Cycle done. Clean old memory (Phase 5/7 Memory Control)
+            # Cycle done. Thực thi toàn bộ quy trình Dọn Rác (Garbage Collection)
             try:
-                clean_old_topics(hours=48)
+                from modules.state_manager import perform_routine_maintenance
+                perform_routine_maintenance()
             except Exception as e:
-                logger.error(f"Error cleaning old topics: {e}")
+                logger.error(f"Lỗi khi thực thi perform_routine_maintenance: {e}")
                 
             logger.info(f"💤 [RSS LANE] Sleeping for {RSS_LOOP_INTERVAL} seconds...")
             await asyncio.sleep(RSS_LOOP_INTERVAL)

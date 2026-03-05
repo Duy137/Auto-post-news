@@ -110,6 +110,19 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_recent_topics_fingerprint ON recent_topics(fingerprint)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_recent_topics_created ON recent_topics(created_at)')
         
+        # 1.3 Published Events Table (Phase 6 Omni-channel)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS published_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fingerprint TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                lane TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_published_fp_platform ON published_events(fingerprint, platform)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_published_created ON published_events(created_at)')
+        
         # 2. Indexes for Query Performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_state ON articles(state)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_updated_at ON articles(updated_at)')
@@ -420,6 +433,79 @@ def clean_old_topics(hours: int = 48):
     with get_db_connection() as conn:
         conn.execute(f"DELETE FROM recent_topics WHERE created_at < datetime('now', '-{hours} hours')")
         conn.commit()
+
+# ==========================================
+# PHASE 6: PUBLISHED EVENTS AWARENESS
+# ==========================================
+
+def is_event_published(fingerprint: str, platform: str) -> bool:
+    """Kiểm tra xem một sự kiện (fingerprint) đã từng được đăng lên CÙNG 1 nền tảng chưa."""
+    if not fingerprint:
+        return False
+        
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 1 FROM published_events 
+            WHERE fingerprint = ? AND platform = ?
+        ''', (fingerprint, platform))
+        return cursor.fetchone() is not None
+
+def mark_event_published(fingerprint: str, platform: str, lane: str):
+    """Lưu vết bài đã đăng thành công lên nền tảng."""
+    if not fingerprint:
+        return
+        
+    with get_db_connection() as conn:
+        conn.execute('''
+            INSERT INTO published_events (fingerprint, platform, lane)
+            VALUES (?, ?, ?)
+        ''', (fingerprint, platform, lane))
+        conn.commit()
+
+# ==========================================
+# MAINTENANCE: GARBAGE COLLECTION
+# ==========================================
+
+def perform_routine_maintenance():
+    """
+    Dọn dẹp tự động (Auto-Cleanup) tất cả dữ liệu rác cũ theo yêu cầu của System Architect:
+    - articles: giữ 2 ngày
+    - recent_topics: giữ 48 hours
+    - express_seen: giữ 24 hours
+    - published_events: giữ 7 ngày
+    """
+    logger.info("🧹 [MAINTENANCE] Bắt đầu dọn dẹp Database tự động...")
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 1. Dọn dẹp Articles (> 2 days)
+            cursor.execute("DELETE FROM articles WHERE created_at < datetime('now', '-2 days')")
+            deleted_articles = cursor.rowcount
+            
+            # 2. Dọn dẹp Recent Topics (> 48h)
+            cursor.execute("DELETE FROM recent_topics WHERE created_at < datetime('now', '-48 hours')")
+            deleted_topics = cursor.rowcount
+            
+            # 3. Dọn dẹp Express Seen (> 24h)
+            cursor.execute("DELETE FROM express_seen WHERE created_at < datetime('now', '-24 hours')")
+            deleted_express = cursor.rowcount
+            
+            # 4. Dọn dẹp Published Events (> 7 days)
+            cursor.execute("DELETE FROM published_events WHERE created_at < datetime('now', '-7 days')")
+            deleted_published = cursor.rowcount
+            
+            conn.commit()
+            
+            logger.info(f"🧹 [MAINTENANCE] Đã xóa: {deleted_articles} articles, {deleted_topics} topics, {deleted_express} express hash, {deleted_published} published events.")
+            
+            # Thực thi SQLite Vacuum để nén file DB, giải phóng dung lượng ổ cứng
+            cursor.execute("VACUUM")
+            logger.info("🧹 [MAINTENANCE] Hoàn tất nén Database (VACUUM).")
+            
+    except Exception as e:
+        logger.error(f"❌ [MAINTENANCE] Lỗi trong quá trình dọn dẹp Database: {e}")
 # 🧪 TEST MODE VÀ MÔ PHỎNG AN TOÀN
 # ==========================================
 if __name__ == "__main__":
