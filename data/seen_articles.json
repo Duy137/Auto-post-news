@@ -1,0 +1,769 @@
+{
+  "seen_ids": [
+    "c38436e7665653f42be19c269602701c404c64c9",
+    "4e035b699e17bfab8ef4b69c467369a6c91c9226",
+    "989fec2dbaa532465f895810382d444446f0e634",
+    "fd7ac7ae391c1f1e0d1cd5452195b8aa14f23da2",
+    "c760834ed55a5efbd164c3a6822aeff1ed4d454e",
+    "2dc315f3746e3bf16a6aa8e667c5c8704d242650",
+    "46a9b49d508282036913b99c2fb8dfefa45065ff",
+    "hash_111",
+    "c8ab8d2b80ec37232eb8ee35cb2d447d74c07680",
+    "da907de7ed857f8944c0cf81306a01d1a7d644c7",
+    "89200642c91733bee26cac8a7a502eb699e06e4d",
+    "afda5ebf87b9ffc6c843ef4fdc4104752b0aaca7",
+    "7b634c7a0e17d3b20d75705bdc784d811bfe3af7",
+    "7107b2648fb794c3e9d5a9fe0650a19ca47f4931",
+    "1d9e16e9bb4c506305b770f7e6584f2e9ea6bbc9",
+    "0e5573d96e65ed09d46e0c530af4936e7d146a0a",
+    "e4287f2cc9bc2ca65d8d8bbb28a1604acb3f61ee",
+    "5979c1e1d5e8eb1696cc2f1a7bbd8476277bfe02",
+    "c0a37aa852227d7b95ad795362923dcdc144198c",
+    "577c34cbead2383c0642ec119a71d06e3b99163b",
+    "a566247a38d2ab7da68e46665b72f7528018fb43",
+    "2d4e408ebdecf24f2637d7b614ae9117a89afc7c",
+    "c3f2d4c90ff6d88628fb2ac7ebb0cb0d9a901bc6",
+    "3a155e66cffa8b3a0fc6fd6f8ff03c1bd16b7dcf",
+    "e1dc0535d3355b3b1a146d6070a45908b1e37485",
+    "b2962940d6b85e081b37a66a08dd29a64514e076",
+    "2dcd7cf5ee06cbbbfb020317462ef1d7cb9ec819",
+    "a8161d0f0cd74ffce66a787269b5857540c4ec93",
+    "23bec5166fc8c6510595b791f01cb4ec7e29eb23",
+    "48fdd0a57418d3508b56ebfa5dd217e749a5d369",
+    "dd1327903ea11de7239cf87e79a3420fd4cd8ba3",
+    "5a967965fe45765a61a021ceb3f83b2e2d2d27fa",
+    "d3c2c9f9638771a2b3d7b8ea006b9106587f3ab2",
+    "49627c6675dcfd14850dc032b6cc7f120ce774bf",
+    "ac770ebe0f22a427de84c26174612d5ef15acf36",
+    "96f1a2f4900e925ae0186af7ba27b95fbaa2d41a",
+    "a2a3b75aeaca8851880283ecee7b6e5864953a4b",
+    "58d41b5f4c4392a5b0a3f18749db9abe6ab4306a",
+    "337e10b2cfeb5ed19493c6d64232d6631d14dc4f",
+    "ad89e8bf8f44eee644b6b4f06d43c2fcdd2a784d",
+    "74d4d4a4f1579436e41312255c8fec641ab05601",
+    "71fff4f387642e598dd7c262069dd53ec4d4c603",
+    "89b3c9b5e2a3a8467daa655be043b10a84d919e4",
+    "f97b81fad858032d68ae619797ae32f618532e50",
+    "aff8184eb2ab383f450705cb4cc3a2d3cb6b7bfd",
+    "68d00141c577c68473bcf056e1d74bb2b71163d3",
+    "3cb74b88a10b22af5b4b9ef1988e3e87c30602e0",
+    "aa08ea5f18f14d9cb9419dadeb4e9fa8e112b44a",
+    "1b1f16c0a86ee529836857dfcae7b2719fda34a5",
+    "04a0cb26498af4ac8ddda22cfeaf7d853de00793",
+    "d954fb0bde42744401ac46ddd3a418b336948995",
+    "dc6072d1d50a45e70b4beaee5c7d77904e9006b1",
+    "a8948c0f9da224154b31ef0ea6f68b89a79e873a",
+    "02582d7e360cf0ebdbe39216dde18cb8f68ab105",
+    "93eeedfe9c937dd3db58dad3b8e1d554d7a802ba",
+    "9de303d84fa591fe11e30e7f44cf4dd123a80334",
+    "adc2373918f95d092a8a08c35cd329a7512f55e6",
+    "hash_333",
+    "0f18b87874b693e4b697b23d471595b48f48b8ba",
+    "1fc957f678aa34c72d039a9fb8b2fde756be649f",
+    "9a3cd70859904860fe7ee152c7addd83354162fe",
+    "4a9ae37dcf4e5380b5ad8f3ed081b951dbc59e4a",
+    "3d387e2dfcb423b99e7427c6625f2afb4fc200d2",
+    "058a4ef8316a66f9cdae9967d18aa0251694c054",
+    "8338731557bc811c2b66129aa880f5fb9484ad3d",
+    "909d0c50c398cd6193cfcefd426fd0bffb80cd3d",
+    "2ed6b21dd9b5446a6affa42d1acd14f09f3dc146",
+    "f775a9642486d2fcc20f51e40f99bad94213556c",
+    "e963fe2eb5b5b125c2175d7bbae352896aa9bd83",
+    "hash_222",
+    "3ca531a178c20394802250274ca44a7969c6cdf6",
+    "8787e87e188cb615ba3e9051e2844a16a4f827c1",
+    "070d06ae0c203be6a7c04c16d5675c7ec031c38f",
+    "75bdbab4aa96b14f72a32c41e5c08fedb716fa5d",
+    "5a303bd6e5d43caa4dd346b27280f9cb97484a58",
+    "1d4bd486f69ed3777084f22cbe2e5798c99d19bb",
+    "ce9d7b55337b1630da8d975f6c0c84b7b447433d",
+    "b431ea497743c593e10ff5173e1a8bad73c4aae0",
+    "fbeb5a39a976bce84320ceca2767616ac97e2e51",
+    "cceca5ef0c42bc5512bbae11eebe1971607d19d9",
+    "0be2f21a1b20483fe07c5b41a02770673f2c7237",
+    "0cd2adb7418edc7326e82addc446c933d7bc178a",
+    "3d791e8ae9fa837fb37b31093481d5e7a4243af4",
+    "f269a0e18f1a5c3e6c60a162411b9d6ab61ae9cd",
+    "69ebf507b0921ddd3d51afd7ddc4e009902d33dc",
+    "7a0bef019e238ae9840145aa24c663f22f9bba9c",
+    "e8d9ae14d9500abe9ab54d4a956ba3d8d52593f0",
+    "4facfd8e0d9d4f0331a018533bef344c260fb241",
+    "3a9797a9fb1351d4844806d9baf824518924b123",
+    "1dbc7ac08cd08f6e19456d89b4e58035f8ea312c",
+    "7716360a440f1faa73f313c9c04fd38fedf8a7b1",
+    "bc6699c82a69754c4f35d7d4fe8fe05304ad31e3",
+    "cbdf6c2e3171ebddf24492158535b4e68cc944dd",
+    "5a1c0adf39bd6912b0927eac75cd991132fb7a04",
+    "8cbfa9e00157a4faae529db0d336b8d045f42b39",
+    "d14255a94f765682220404607a167d61bd145675",
+    "c72bbfb4a2896f819b9f1ef5a1448300daa15b92",
+    "907c797efd2e4d3f32a8d6ae01c9add38bf695fe",
+    "d0d27da7993e5f709fe1e4765aeb195959236c45"
+  ],
+  "recent_articles": [
+    {
+      "title": "BTC reaches record high",
+      "link": "https://site.com/btc-reaches-record-high-100k",
+      "published_ts": 1700000000,
+      "event_root_id": "evt_1c2c815a"
+    },
+    {
+      "title": "Mt. Gox's former CEO floats hard fork to recover 80K hacked Bitcoin",
+      "link": "https://cointelegraph.com/news/mt-gox-former-ceo-proposes-hard-fork-recover-lost-bitcoin",
+      "published_ts": 1772229588,
+      "event_root_id": "evt_d4ee2c49",
+      "root_created_ts": 1772229588
+    },
+    {
+      "title": "Morgan Stanley applies for OCC bank charter to custody crypto",
+      "link": "https://cointelegraph.com/news/morgan-stanley-applies-bank-charter-custody-trade-stake-crypto",
+      "published_ts": 1772219140,
+      "event_root_id": "evt_2a19b9eb",
+      "root_created_ts": 1772219140
+    },
+    {
+      "title": "Crypto VC Paradigm expands into AI, robotics with $1.5B fund: WSJ",
+      "link": "https://cointelegraph.com/news/crypto-vc-paradigm-invest-ai-robotics-frontier-tech",
+      "published_ts": 1772211730,
+      "event_root_id": "evt_cc0fc69d",
+      "root_created_ts": 1772211730
+    },
+    {
+      "title": "Bitcoin price slump versus gold’s gains highlights evolving crypto market",
+      "link": "https://cointelegraph.com/news/bitcoin-price-slump-versus-gold-s-gains-highlights-evolving-crypto-market",
+      "published_ts": 1772206200,
+      "event_root_id": "evt_5f52e081",
+      "root_created_ts": 1772206200
+    },
+    {
+      "title": "Three Solana data points highlight resilience, but is SOL undervalued?",
+      "link": "https://cointelegraph.com/news/3-solana-data-points-highlight-resilience-but-is-sol-undervalued",
+      "published_ts": 1772202600,
+      "event_root_id": "evt_ef71038d",
+      "root_created_ts": 1772202600
+    },
+    {
+      "title": "Traders may rotate into Bitcoin if UBS’ bearish US stocks view comes true",
+      "link": "https://cointelegraph.com/news/traders-may-rotate-into-bitcoin-if-ubs-bearish-us-stocks-view-comes-true",
+      "published_ts": 1772198863,
+      "event_root_id": "evt_0dbf2420",
+      "root_created_ts": 1772198863
+    },
+    {
+      "title": "Here’s what happened in crypto today",
+      "link": "https://cointelegraph.com/news/what-happened-in-crypto-today",
+      "published_ts": 1772198657,
+      "event_root_id": "evt_7abaa5d1",
+      "root_created_ts": 1772198657
+    },
+    {
+      "title": "Crypto Biz: A Bitcoin treasury shareholder revolt",
+      "link": "https://cointelegraph.com/news/crypto-biz-bitcoin-treasury-shareholder-revolt",
+      "published_ts": 1772198187,
+      "event_root_id": "evt_99bac6ba",
+      "root_created_ts": 1772198187
+    },
+    {
+      "title": "Alchemy introduces autonomous payment rails for AI agents on Base",
+      "link": "https://cointelegraph.com/news/alchemy-ai-agents-pay-access-blockchain-data-usdc",
+      "published_ts": 1772198131,
+      "event_root_id": "evt_7102b7ec",
+      "root_created_ts": 1772198131
+    },
+    {
+      "title": "US DOJ seized and froze $580M in crypto from ‘Chinese transnational criminals‘",
+      "link": "https://cointelegraph.com/news/us-justice-department-seized-crypto-china",
+      "published_ts": 1772196693,
+      "event_root_id": "evt_a20bdf6e",
+      "root_created_ts": 1772196693
+    },
+    {
+      "title": "Bitcoin manipulation claims face pushback as ETFs snap 5-week outflow run: Finance Redefined",
+      "link": "https://cointelegraph.com/news/analysts-reject-jane-street-dump-claims-bitcoin-etf-inflows-finance-redefined",
+      "published_ts": 1772193600,
+      "event_root_id": "evt_70b40dd0",
+      "root_created_ts": 1772193600
+    },
+    {
+      "title": "Price predictions 2/27: BTC, ETH, XRP, BNB, SOL, DOGE, BCH, ADA, HYPE, LINK",
+      "link": "https://cointelegraph.com/news/price-predictions-2-27-btc-eth-xrp-bnb-sol-doge-bch-ada-hype-link",
+      "published_ts": 1772192504,
+      "event_root_id": "evt_d851c30b",
+      "root_created_ts": 1772192504
+    },
+    {
+      "title": "Why yen stablecoins are key to Japan’s crypto ambitions",
+      "link": "https://cointelegraph.com/news/yen-stablecoins-japan-crypto-ambitions",
+      "published_ts": 1772190000,
+      "event_root_id": "evt_b48b7f24",
+      "root_created_ts": 1772190000
+    },
+    {
+      "title": "Figure Technology stock crashes 20% following mixed Q4 earnings",
+      "link": "https://cointelegraph.com/news/figure-technology-solutions-stock-post-earnings",
+      "published_ts": 1772189067,
+      "event_root_id": "evt_6fe68647",
+      "root_created_ts": 1772189067
+    },
+    {
+      "title": "Minnesota to weigh ban on crypto kiosks after scam reports",
+      "link": "https://cointelegraph.com/news/minnesota-ban-crypto-kiosks-scams",
+      "published_ts": 1772187420,
+      "event_root_id": "evt_5ed6c949",
+      "root_created_ts": 1772187420
+    },
+    {
+      "title": "How the EU’s crypto tax rules are expected to work for users and platforms",
+      "link": "https://cointelegraph.com/news/how-the-eu-s-crypto-tax-rules-are-expected-to-work-for-users-and-platforms",
+      "published_ts": 1772183090,
+      "event_root_id": "evt_4d7bcb5b",
+      "root_created_ts": 1772183090
+    },
+    {
+      "title": "Barclays probes blockchain for banking functions like payments, deposits: Report",
+      "link": "https://cointelegraph.com/news/barclays-blockchain-payments-deposits-stablecoins-bloomberg",
+      "published_ts": 1772182805,
+      "event_root_id": "evt_7c7cb58e",
+      "root_created_ts": 1772182805
+    },
+    {
+      "title": "Bitcoin to $30K? Analysts debate when and at what price BTC will bottom",
+      "link": "https://cointelegraph.com/news/bitcoin-to-30k-analysts-debate-when-what-price-btc-price-will-bottom",
+      "published_ts": 1772180791,
+      "event_root_id": "evt_86b1cb6b",
+      "root_created_ts": 1772180791
+    },
+    {
+      "title": "Crypto taxes updated, BTC stuck below $70K: Month in charts",
+      "link": "https://cointelegraph.com/news/crypto-taxes-btc-stuck-70k-month-in-charts",
+      "published_ts": 1772179762,
+      "event_root_id": "evt_9d9ec809",
+      "root_created_ts": 1772179762
+    },
+    {
+      "title": "Bitcoin threatens new breakdown as US PPI sends gold to 1-month high",
+      "link": "https://cointelegraph.com/news/bitcoin-threatens-new-breakdown-us-ppi-gold-1-month-high",
+      "published_ts": 1772176213,
+      "event_root_id": "evt_b4d964d4",
+      "root_created_ts": 1772176213
+    },
+    {
+      "title": "South Korea’s tax office leaks wallet seed and loses $4.8M in seized tokens",
+      "link": "https://cointelegraph.com/news/south-korea-tax-office-leaked-wallet-seed",
+      "published_ts": 1772175976,
+      "event_root_id": "evt_5ccc2445",
+      "root_created_ts": 1772175976
+    },
+    {
+      "title": "PayPal, MoonPay and M0 launch PYUSDx to let devs issue app-specific stablecoins",
+      "link": "https://cointelegraph.com/news/paypal-moonpay-and-m0-launch-pyusdx-to-let-apps-create-their-own-stablecoins",
+      "published_ts": 1772175600,
+      "event_root_id": "evt_27a51623",
+      "root_created_ts": 1772175600
+    },
+    {
+      "title": "UK gambling regulator weighs allowing crypto payments for online betting",
+      "link": "https://cointelegraph.com/news/uk-gambling-watchdog-allow-crypto-payments-fca-framework",
+      "published_ts": 1772173066,
+      "event_root_id": "evt_dd378cf6",
+      "root_created_ts": 1772173066
+    },
+    {
+      "title": "Pantera, Franklin Templeton join Sentient Arena to test AI agents",
+      "link": "https://cointelegraph.com/news/sentient-arena-tests-ai-agents-pantera-franklin-templeton",
+      "published_ts": 1772170038,
+      "event_root_id": "evt_214e23eb",
+      "root_created_ts": 1772170038
+    },
+    {
+      "title": "New York judge blocks Binance bid to force US crypto claims into arbitration",
+      "link": "https://cointelegraph.com/news/new-york-judge-blocks-binance-bid-to-force-us-crypto-claims-into-arbitration",
+      "published_ts": 1772167597,
+      "event_root_id": "evt_048c77fe",
+      "root_created_ts": 1772167597
+    },
+    {
+      "title": "Bitcoin’s five-month losing streak may not end in March as $70K caps price",
+      "link": "https://cointelegraph.com/news/bitcoin-five-month-losing-streak-may-not-end-in-march",
+      "published_ts": 1772165701,
+      "event_root_id": "evt_817d2cf8",
+      "root_created_ts": 1772165701
+    },
+    {
+      "title": "Suspected insider wallets rack up $1.2M betting on ZachXBT’s Axiom exposé",
+      "link": "https://cointelegraph.com/news/suspected-insider-1-2m-zachxbt-axiom-expose",
+      "published_ts": 1772162368,
+      "event_root_id": "evt_30b242b6",
+      "root_created_ts": 1772162368
+    },
+    {
+      "title": "Spot Bitcoin ETFs take in $1B in three days as investors buy the dip",
+      "link": "https://cointelegraph.com/news/bitcoin-etfs-1b-inflows-drawdown-dip-buying",
+      "published_ts": 1772160089,
+      "event_root_id": "evt_d1ff9704",
+      "root_created_ts": 1772160089
+    },
+    {
+      "title": "TeraWulf misses Q4 2025 estimates as Bitcoin mining revenue falls",
+      "link": "https://cointelegraph.com/news/terawulf-q4-2025-miss-estimate-mining-revenue-drop",
+      "published_ts": 1772158733,
+      "event_root_id": "evt_b73a8191",
+      "root_created_ts": 1772158733
+    },
+    {
+      "title": "Bitcoin miner MARA posts $1.7B quarterly loss on BTC slump",
+      "link": "https://cointelegraph.com/news/marathon-posts-1-7b-quarterly-loss-bitcoin",
+      "published_ts": 1772156273,
+      "event_root_id": "evt_5ab0da43",
+      "root_created_ts": 1772156273
+    },
+    {
+      "title": "Google paid startup Form Energy $1B for its massive 100-hour battery",
+      "link": "https://techcrunch.com/2026/02/26/google-paid-startup-form-energy-1b-for-its-massive-100-hour-battery",
+      "published_ts": 1772114663,
+      "event_root_id": "evt_0a53cee0",
+      "root_created_ts": 1772114663
+    },
+    {
+      "title": "Welcome to the post-hype crypto market",
+      "link": "https://techcrunch.com/video/welcome-to-the-post-hype-crypto-market",
+      "published_ts": 1772025731,
+      "event_root_id": "evt_99228e69",
+      "root_created_ts": 1772025731
+    },
+    {
+      "title": "Is crypto growing up? Tether risk, Stripe’s stablecoin play, and the GENIUS Act explained",
+      "link": "https://techcrunch.com/podcast/is-crypto-growing-up-tether-risk-stripes-stablecoin-play-and-the-genius-act-explained",
+      "published_ts": 1772025085,
+      "event_root_id": "evt_eb790a57",
+      "root_created_ts": 1772025085
+    },
+    {
+      "title": "Build a pipeline and close deals with an exhibit table at TechCrunch Disrupt 2026",
+      "link": "https://techcrunch.com/2026/02/11/build-a-pipeline-and-close-deals-with-an-exhibit-table-at-techcrunch-disrupt-2026",
+      "published_ts": 1770796800,
+      "event_root_id": "evt_4a61eedd",
+      "root_created_ts": 1770796800
+    },
+    {
+      "title": "YC startups can now receive investment in stablecoin",
+      "link": "https://techcrunch.com/2026/02/03/yc-startups-can-now-recieve-investment-in-stablecoin",
+      "published_ts": 1770123252,
+      "event_root_id": "evt_028c7d97",
+      "root_created_ts": 1770123252
+    },
+    {
+      "title": "Why Tether’s CEO is everywhere right now",
+      "link": "https://techcrunch.com/2026/02/01/why-tethers-ceo-is-everywhere-right-now",
+      "published_ts": 1769952741,
+      "event_root_id": "evt_793939bc",
+      "root_created_ts": 1769952741
+    },
+    {
+      "title": "The conference where founders scale: TechCrunch Founder Summit 2026 tickets are now live at the lowest prices",
+      "link": "https://techcrunch.com/2026/01/28/the-conference-where-founders-scale-founder-summit-2026-tickets-are-now-live-at-the-lowest-prices",
+      "published_ts": 1769587200,
+      "event_root_id": "evt_11e97622",
+      "root_created_ts": 1769587200
+    },
+    {
+      "title": "SEC drops lawsuit against Winklevoss twins’ Gemini crypto exchange",
+      "link": "https://techcrunch.com/2026/01/24/sec-drops-lawsuit-against-winklevoss-twins-gemini-crypto-exchange",
+      "published_ts": 1769252793,
+      "event_root_id": "evt_6e3352bf",
+      "root_created_ts": 1769252793
+    },
+    {
+      "title": "Bitfinex hacker Ilya Lichtenstein credits Trump for early release from prison",
+      "link": "https://techcrunch.com/2026/01/03/bitfinex-hacker-ilya-lichtenstein-credits-trump-for-early-release-from-prison",
+      "published_ts": 1767444503,
+      "event_root_id": "evt_6defbc2a",
+      "root_created_ts": 1767444503
+    },
+    {
+      "title": "Hackers stole over $2.7B in crypto in 2025, data shows",
+      "link": "https://techcrunch.com/2025/12/23/hackers-stole-over-2-7-billion-in-crypto-in-2025-data-shows",
+      "published_ts": 1766491200,
+      "event_root_id": "evt_d07a910a",
+      "root_created_ts": 1766491200
+    },
+    {
+      "title": "Coinbase starts onboarding users again in India, plans for fiat on-ramp next year",
+      "link": "https://techcrunch.com/2025/12/07/coinbase-starts-onboarding-users-again-in-india-plans-for-fiat-on-ramp-for-next-year",
+      "published_ts": 1765098000,
+      "event_root_id": "evt_754b882c",
+      "root_created_ts": 1765098000
+    },
+    {
+      "title": "New report examines how David Sacks might profit from Trump administration role",
+      "link": "https://techcrunch.com/2025/11/30/new-report-examines-how-david-sacks-might-profit-from-trump-administration-role",
+      "published_ts": 1764513544,
+      "event_root_id": "evt_a5b56f77",
+      "root_created_ts": 1764513544
+    },
+    {
+      "title": "Why Benchmark made a rare crypto bet on trading app Fomo, with $17M Series A",
+      "link": "https://techcrunch.com/2025/11/06/why-benchmark-made-a-rare-crypto-bet-on-trading-app-fomo-with-17m-series-a",
+      "published_ts": 1762412400,
+      "event_root_id": "evt_81b3e399",
+      "root_created_ts": 1762412400
+    },
+    {
+      "title": "Coinbase CEO Brian Armstrong trolls the prediction markets",
+      "link": "https://techcrunch.com/2025/11/01/coinbase-ceo-brian-armstrong-trolls-the-prediction-markets",
+      "published_ts": 1761991148,
+      "event_root_id": "evt_004899b7",
+      "root_created_ts": 1761991148
+    },
+    {
+      "title": "Solana co-founder Anatoly Yakovenko is a big fan of agentic coding",
+      "link": "https://techcrunch.com/2025/10/29/solana-co-founder-anatoly-yakovenko-is-a-big-fan-of-agentic-coding",
+      "published_ts": 1761752640,
+      "event_root_id": "evt_5a81964b",
+      "root_created_ts": 1761752640
+    },
+    {
+      "title": "TechCrunch Disrupt 2025: Day 3",
+      "link": "https://techcrunch.com/2025/10/29/techcrunch-disrupt-2025-day-3",
+      "published_ts": 1761721200,
+      "event_root_id": "evt_1c864281",
+      "root_created_ts": 1761721200
+    },
+    {
+      "title": "MoviePass opens fantasy league game Mogul to the public",
+      "link": "https://techcrunch.com/2025/10/29/moviepass-opens-fantasy-league-game-mogul-to-the-public",
+      "published_ts": 1761714000,
+      "event_root_id": "evt_78d7b23e",
+      "root_created_ts": 1761714000
+    },
+    {
+      "title": "TechCrunch Disrupt 2025 begins in less than 24 hours — catch our last ticket deals",
+      "link": "https://techcrunch.com/2025/10/26/techcrunch-disrupt-2025-begins-in-less-than-24-hours-catch-our-last-ticket-deals",
+      "published_ts": 1761479848,
+      "event_root_id": "evt_0dab3ff7",
+      "root_created_ts": 1761479848
+    },
+    {
+      "title": "OpenAI wins defense contract hours after government ditches Anthropic",
+      "link": "https://cointelegraph.com/news/openai-defense-contract-anthropic-ban-classified-ai",
+      "published_ts": 1772237765,
+      "event_root_id": "evt_24209f21",
+      "root_created_ts": 1772237765
+    },
+    {
+      "title": "Bitcoin price drops to $63K as US, Israel bomb Iran",
+      "link": "https://cointelegraph.com/news/bitcoin-price-drops-63k-us-israel-bomb-iran",
+      "published_ts": 1772241833,
+      "event_root_id": "evt_a4c8ea60",
+      "root_created_ts": 1772241833
+    },
+    {
+      "title": "Tether froze $4.2B in tokens tied to illicit activity in 3 years: Report",
+      "link": "https://cointelegraph.com/news/tether-freezes-4-2b-usdt-illicit-activity-report",
+      "published_ts": 1772248397,
+      "event_root_id": "evt_1761c851",
+      "root_created_ts": 1772248397
+    },
+    {
+      "title": "Why institutions still prefer Ethereum despite faster blockchains",
+      "link": "https://cointelegraph.com/news/institutions-prefer-eth-faster-blockchains",
+      "published_ts": 1772258400,
+      "event_root_id": "evt_4feb98b6",
+      "root_created_ts": 1772258400
+    },
+    {
+      "title": "Buying Bitcoin? Hold for at least three years to avoid losses, data says",
+      "link": "https://cointelegraph.com/news/buying-bitcoin-hold-for-at-least-three-years-to-avoid-losses-data-says",
+      "published_ts": 1772262056,
+      "event_root_id": "evt_a1582f41",
+      "root_created_ts": 1772262056
+    },
+    {
+      "title": "11 US senators request federal probe into Binance’s sanctions compliance",
+      "link": "https://cointelegraph.com/news/11-us-senators-request-binance-sanctions-probe",
+      "published_ts": 1772260643,
+      "event_root_id": "evt_27ff68fe",
+      "root_created_ts": 1772260643
+    },
+    {
+      "title": "Crypto treasury companies likely to consolidate in 2026: Crypto exec",
+      "link": "https://cointelegraph.com/news/crypto-treasury-companies-consolidate-2026",
+      "published_ts": 1772279804,
+      "event_root_id": "evt_0f9ba351",
+      "root_created_ts": 1772279804
+    },
+    {
+      "title": "Bitcoin bottom fractal calls for 130% rally, but is the model valid in 2026?",
+      "link": "https://cointelegraph.com/news/bitcoin-bottom-fractal-calls-for-130percent-rally-but-is-the-model-valid-in-2026",
+      "published_ts": 1772285359,
+      "event_root_id": "evt_ad8b8f5a",
+      "root_created_ts": 1772285359
+    },
+    {
+      "title": "Anthropic CEO responds to Pentagon order prohibiting military use",
+      "link": "https://cointelegraph.com/news/anthropic-ceo-responds-pentagon-order-restrict-military",
+      "published_ts": 1772290113,
+      "event_root_id": "evt_106f3e3e",
+      "root_created_ts": 1772290113
+    },
+    {
+      "title": "Ether’s 60% down from its 2025 high, but TradFi keeps betting on ETH: Here’s why",
+      "link": "https://cointelegraph.com/news/ether-60percent-down-from-its-2025-high-but-tradfi-keeps-betting-on-eth-here-s-why",
+      "published_ts": 1772289000,
+      "event_root_id": "evt_e1d3d52a",
+      "root_created_ts": 1772289000
+    },
+    {
+      "title": "Ethereum smart accounts are finally coming 'within a year' — Vitalik Buterin",
+      "link": "https://cointelegraph.com/news/ethereum-smart-accounts-are-finally-coming-within-a-year-says-vitalik",
+      "published_ts": 1772308443,
+      "event_root_id": "evt_f61d1bee",
+      "root_created_ts": 1772308443
+    },
+    {
+      "title": "Bitcoin recovers to $68K following death of Iranian Supreme Leader",
+      "link": "https://cointelegraph.com/news/bitcoin-recovers-to-68k-following-reported-death-of-iranian-supreme-leader",
+      "published_ts": 1772315911,
+      "event_root_id": "evt_54636bc0",
+      "root_created_ts": 1772315911
+    },
+    {
+      "title": "6 Polymarket traders net $1M on US-Iran strike, spark insider fears: Report",
+      "link": "https://cointelegraph.com/news/polymarket-traders-1m-us-iran-strike-insider-trading-concerns",
+      "published_ts": 1772324190,
+      "event_root_id": "evt_5a803459",
+      "root_created_ts": 1772324190
+    },
+    {
+      "title": "US military used Anthropic in Iran strike despite ban order by Trump: WSJ",
+      "link": "https://cointelegraph.com/news/us-military-used-anthropic-ai-iran-strike-trump-ban",
+      "published_ts": 1772334218,
+      "event_root_id": "evt_09544665",
+      "root_created_ts": 1772334218
+    },
+    {
+      "title": "Tokenized gold leads ‘100% of weekend price discovery’ while CME futures are closed",
+      "link": "https://cointelegraph.com/news/tokenized-gold-weekend-price-discovery-cme-closed",
+      "published_ts": 1772340532,
+      "event_root_id": "evt_2d9c1882",
+      "root_created_ts": 1772340532
+    },
+    {
+      "title": "Bitcoin still due 'next leg down' as $73K BTC price precedes death cross",
+      "link": "https://cointelegraph.com/news/bitcoin-still-due-next-leg-down-72k-btc-price-precedes-death-cross",
+      "published_ts": 1772613741,
+      "event_root_id": "evt_eccd0761",
+      "root_created_ts": 1772613741
+    },
+    {
+      "title": "RedStone launches Stellar price feeds after $10M exploit highlights oracle risks",
+      "link": "https://cointelegraph.com/news/redstone-launches-stellar-price-oracles-defi-infrastructure",
+      "published_ts": 1772611200,
+      "event_root_id": "evt_361a72f3",
+      "root_created_ts": 1772611200
+    },
+    {
+      "title": "Bitcoin is a real-time sentiment gauge for weekend warmongering",
+      "link": "https://cointelegraph.com/news/bitcoin-real-time-sentiment-gauge-weekend-war",
+      "published_ts": 1772608741,
+      "event_root_id": "evt_e63d5114",
+      "root_created_ts": 1772608741
+    },
+    {
+      "title": "UK House of Lords presses Coinbase exec on stablecoins, KYC and bank run fears",
+      "link": "https://cointelegraph.com/news/uk-lords-grill-coinbase-over-stablecoins",
+      "published_ts": 1772607884,
+      "event_root_id": "evt_6722a13f",
+      "root_created_ts": 1772607884
+    },
+    {
+      "title": "South Korea moves to cap crypto exchange shareholder stakes at 20%: Report",
+      "link": "https://cointelegraph.com/news/south-korea-crypto-exchange-shareholder-cap-20-percent",
+      "published_ts": 1772604084,
+      "event_root_id": "evt_1c3abbd3",
+      "root_created_ts": 1772604084
+    },
+    {
+      "title": "XRP price breakout targets $1.95 amid five-day ETF inflow streak",
+      "link": "https://cointelegraph.com/news/xrp-price-breakout-targets-1-95-five-day-etf-inflow-streak",
+      "published_ts": 1772603749,
+      "event_root_id": "evt_9706196e",
+      "root_created_ts": 1772603749
+    },
+    {
+      "title": "Three Bitcoin signals show $80K is next BTC price target for bulls",
+      "link": "https://cointelegraph.com/news/3-bitcoin-signals-80k-next-btc-price-target-bulls",
+      "published_ts": 1772600165,
+      "event_root_id": "evt_4d6363eb",
+      "root_created_ts": 1772600165
+    },
+    {
+      "title": "Kraken wins Kansas City Fed approval for limited master account access",
+      "link": "https://cointelegraph.com/news/kraken-crypto-exchange-fed-master-account",
+      "published_ts": 1772599182,
+      "event_root_id": "evt_41e2da26",
+      "root_created_ts": 1772599182
+    },
+    {
+      "title": "Iran’s largest crypto exchange shows no clear signs of capital flight: TRM",
+      "link": "https://cointelegraph.com/news/iran-nobitex-no-capital-flight-trm-analysis",
+      "published_ts": 1772598881,
+      "event_root_id": "evt_da59c67b",
+      "root_created_ts": 1772598881
+    },
+    {
+      "title": "FATF flags stablecoin P2P transfers as sanctions evasion risk",
+      "link": "https://cointelegraph.com/news/fatf-says-stablecoins-now-dominate-illicit-crypto-flows-including-sanctions-evasion",
+      "published_ts": 1772596892,
+      "event_root_id": "evt_e9cc7dec",
+      "root_created_ts": 1772596892
+    },
+    {
+      "title": "Ex-OpenAI researcher’s hedge fund reveals big Bitcoin miner bets in new SEC filing",
+      "link": "https://cointelegraph.com/news/situational-awareness-aschenbrenner-13f-ai-infrastructure-power-core-scientific",
+      "published_ts": 1772594549,
+      "event_root_id": "evt_88fad67f",
+      "root_created_ts": 1772594549
+    },
+    {
+      "title": "Bitcoin price nears one-month high as bulls propel BTC toward $72K",
+      "link": "https://cointelegraph.com/news/bitcoin-price-nears-one-month-high-as-bulls-propel-btc-toward-72k",
+      "published_ts": 1772593936,
+      "event_root_id": "evt_c0fabe89",
+      "root_created_ts": 1772593936
+    },
+    {
+      "title": "X introduces 90-day revenue-sharing ban for undisclosed AI war videos",
+      "link": "https://cointelegraph.com/news/x-90-day-revenue-sharing-ban-undisclosed-ai-conflict-videos",
+      "published_ts": 1772587637,
+      "event_root_id": "evt_5bb4cbea",
+      "root_created_ts": 1772587637
+    },
+    {
+      "title": "US spot Bitcoin ETFs add $225M as BlackRock’s IBIT offsets redemptions",
+      "link": "https://cointelegraph.com/news/bitcoin-etf-225-million-inflows-blackrock-ibit-counters-selling",
+      "published_ts": 1772586932,
+      "event_root_id": "evt_a3c88c79",
+      "root_created_ts": 1772586932
+    },
+    {
+      "title": "Cathie Wood’s Ark loads up on Coinbase, Robinhood as stocks slide on Iran conflict",
+      "link": "https://cointelegraph.com/news/ark-invest-buys-coinbase-robinhood-amid-market-selloff",
+      "published_ts": 1772586418,
+      "event_root_id": "evt_16f94535",
+      "root_created_ts": 1772586418
+    },
+    {
+      "title": "Korea halts trading as key indexes drop 10% on Middle East crisis",
+      "link": "https://cointelegraph.com/news/south-korean-stock-exchange-halts-trading-amid-wider-market-rout-on-spectre-of-war",
+      "published_ts": 1772579111,
+      "event_root_id": "evt_b09bda32",
+      "root_created_ts": 1772579111
+    },
+    {
+      "title": "Former LAPD officer convicted of kidnapping teen in $350K crypto robbery",
+      "link": "https://cointelegraph.com/news/former-lapd-cop-convicted-of-350k-crypto-theft-and-kidnapping",
+      "published_ts": 1772578790,
+      "event_root_id": "evt_4e8ce818",
+      "root_created_ts": 1772578790
+    },
+    {
+      "title": "Indiana governor signs bill allowing crypto in retirement plans",
+      "link": "https://cointelegraph.com/news/indiana-retirement-plans-crypto-bill-1042",
+      "published_ts": 1772578668,
+      "event_root_id": "evt_9c4f8e7f",
+      "root_created_ts": 1772578668
+    },
+    {
+      "title": "TradFi to adopt 24/7 crypto rails sooner than expected: Bitwise",
+      "link": "https://cointelegraph.com/news/tradfi-will-move-crypto-rails-sooner-than-expected-bitwise",
+      "published_ts": 1772574228,
+      "event_root_id": "evt_0fec7af4",
+      "root_created_ts": 1772574228
+    },
+    {
+      "title": "AI agents overwhelmingly prefer Bitcoin over fiat in new study",
+      "link": "https://cointelegraph.com/news/nearly-half-ai-agents-chose-bitcoin-preferred-money-research",
+      "published_ts": 1772571297,
+      "event_root_id": "evt_8443c0ce",
+      "root_created_ts": 1772571297
+    },
+    {
+      "title": "Trump’s ex-crypto advisor: US government must go beyond ‘liking Bitcoin’",
+      "link": "https://cointelegraph.com/news/trump-s-former-crypto-advisor-us-govt-must-go-beyond-liking-bitcoin",
+      "published_ts": 1772569110,
+      "event_root_id": "evt_3afe955e",
+      "root_created_ts": 1772569110
+    },
+    {
+      "title": "Australia is at risk of missing the $17B crypto boat, researchers say",
+      "link": "https://cointelegraph.com/news/australia-digital-finance-17-billion-opportunity",
+      "published_ts": 1772564539,
+      "event_root_id": "evt_749c019b",
+      "root_created_ts": 1772564539
+    },
+    {
+      "title": "Donald Trump takes swipe at banks over stalled crypto bill",
+      "link": "https://cointelegraph.com/news/trump-takes-swipe-banks-over-stalled-crypto-bill",
+      "published_ts": 1772561994,
+      "event_root_id": "evt_6612029b",
+      "root_created_ts": 1772561994
+    },
+    {
+      "title": "Ray Dalio cautions on Bitcoin, says ‘there is only one gold’",
+      "link": "https://cointelegraph.com/news/ray-dalio-cautions-bitcoin-safe-haven-asset",
+      "published_ts": 1772559536,
+      "event_root_id": "evt_f692bfd0",
+      "root_created_ts": 1772559536
+    },
+    {
+      "title": "What’s at stake for crypto as primaries begin in 3 US states",
+      "link": "https://cointelegraph.com/news/crypto-laws-states-party-primaries",
+      "published_ts": 1772551999,
+      "event_root_id": "evt_744c7d6f",
+      "root_created_ts": 1772551999
+    },
+    {
+      "title": "Locals prefer satoshis to dollars, says Africa Bitcoin chair Stafford Masie",
+      "link": "https://cointelegraph.com/news/where-i-come-from-bitcoin-is-money-says-africa-bitcoin-corp-chair-stafford-masie",
+      "published_ts": 1772551594,
+      "event_root_id": "evt_1da82946",
+      "root_created_ts": 1772551594
+    },
+    {
+      "title": "CFTC chair teases crypto perpetual futures in ‘the next month or so‘",
+      "link": "https://cointelegraph.com/news/cftc-chair-crypto-perpetual-futures",
+      "published_ts": 1772549536,
+      "event_root_id": "evt_bd61d5bf",
+      "root_created_ts": 1772549536
+    },
+    {
+      "title": "MARA exec pushes back on Bitcoin treasury sell-off narrative",
+      "link": "https://cointelegraph.com/news/mara-bitcoin-sell-off-claims-fact-check-treasury-strategy",
+      "published_ts": 1772549422,
+      "event_root_id": "evt_26930cf8",
+      "root_created_ts": 1772549422
+    },
+    {
+      "title": "BitGo expands MiCA-compliant crypto-as-a-service across EEA",
+      "link": "https://cointelegraph.com/news/bitgo-expands-mica-compliant-crypto-as-a-service-across-the-eea",
+      "published_ts": 1772545374,
+      "event_root_id": "evt_dfcc787c",
+      "root_created_ts": 1772545374
+    },
+    {
+      "title": "Why Peter Thiel’s Founders Fund walked away from an Ether treasury bet",
+      "link": "https://cointelegraph.com/news/why-peter-thiel-s-founders-fund-walked-away-from-an-ether-treasury-bet",
+      "published_ts": 1772617285,
+      "event_root_id": "evt_5a69fec5",
+      "root_created_ts": 1772617285
+    },
+    {
+      "title": "Morgan Stanley taps Coinbase and BNY for Bitcoin ETF custody",
+      "link": "https://cointelegraph.com/news/morgan-stanley-coinbase-bny-bitcoin-etf-custody",
+      "published_ts": 1772616871,
+      "event_root_id": "evt_4dbf280a",
+      "root_created_ts": 1772616871
+    }
+  ]
+}
