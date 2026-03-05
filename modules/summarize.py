@@ -76,15 +76,91 @@ def generate_rewrite_prompt(article: Article) -> str:
     return prompt
 
 def parse_structured_output(text: str) -> dict:
-    default_res = {"headline": "", "summary": text, "hashtags": ""}
-    parts = text.split("|||")
-    if len(parts) >= 3:
+    import re
+    default_res = {"headline": "", "summary": text, "impact": "", "hashtags": ""}
+    
+    # Regex thông minh bắt dính nội dung dù AI dùng ||| hay \n
+    head_match = re.search(r"HEADLINE:\s*(.*?)(?=\s*(?:\|\|\||\n+)?\s*SUMMARY:)", text, re.IGNORECASE | re.DOTALL)
+    sum_match = re.search(r"SUMMARY:\s*(.*?)(?=\s*(?:\|\|\||\n+)?\s*(?:IMPACT|HASHTAGS):)", text, re.IGNORECASE | re.DOTALL)
+    impact_match = re.search(r"IMPACT:\s*(.*?)(?=\s*(?:\|\|\||\n+)?\s*(?:HASHTAGS:|$))", text, re.IGNORECASE | re.DOTALL)
+    hash_match = re.search(r"HASHTAGS:\s*(.*)", text, re.IGNORECASE | re.DOTALL)
+    
+    if head_match and sum_match:
         return {
-            "headline": parts[0].replace("HEADLINE:", "").strip(),
-            "summary": parts[1].replace("SUMMARY:", "").strip(),
-            "hashtags": parts[2].replace("HASHTAGS:", "").strip()
+            "headline": head_match.group(1).strip().strip("*").strip('"'),
+            "summary": sum_match.group(1).strip(),
+            "impact": impact_match.group(1).strip() if impact_match else "",
+            "hashtags": hash_match.group(1).strip() if hash_match else ""
         }
-    return default_res
+        
+    # Fallback 1 cho cơ chế cũ nếu regex có label trượt
+    parts = [p.strip() for p in text.split("|||")]
+    if len(parts) >= 3:
+        headline, summary, impact, hashtags = "", "", "", ""
+        for p in parts:
+            if re.match(r"^HEADLINE:", p, re.IGNORECASE):
+                headline = re.sub(r"^HEADLINE:\s*", "", p, flags=re.IGNORECASE).strip().strip("*").strip('"')
+            elif re.match(r"^SUMMARY:", p, re.IGNORECASE):
+                summary = re.sub(r"^SUMMARY:\s*", "", p, flags=re.IGNORECASE).strip()
+            elif re.match(r"^IMPACT:", p, re.IGNORECASE):
+                impact = re.sub(r"^IMPACT:\s*", "", p, flags=re.IGNORECASE).strip()
+            elif re.match(r"^HASHTAGS:", p, re.IGNORECASE):
+                hashtags = re.sub(r"^HASHTAGS:\s*", "", p, flags=re.IGNORECASE).strip()
+                
+        # Nếu cắt bừa không thấy nhãn, lấy theo thứ tự
+        if not headline and not summary:
+            headline = parts[0].replace("HEADLINE:", "").strip().strip("*").strip('"')
+            summary = parts[1].replace("SUMMARY:", "").strip()
+            if len(parts) > 2:
+                if "HASHTAGS" in parts[2].upper():
+                    hashtags = parts[2].replace("HASHTAGS:", "").strip()
+                else:
+                    impact = parts[2].replace("IMPACT:", "").strip()
+            if len(parts) > 3:
+                hashtags = parts[3].replace("HASHTAGS:", "").strip()
+                
+        return {
+            "headline": headline,
+            "summary": summary,
+            "impact": impact,
+            "hashtags": hashtags
+        }
+        
+    # Fallback 2 (Ultimate): Đề phòng trường hợp AI quên hẳn bộ nhãn (HEADLINE, SUMMARY)
+    # Nó chỉ trả về text thô (có thể kèm dính nhãn HASHTAGS hoặc không).
+    cleaned_summary = text
+    hashtags = ""
+    impact = ""
+    headline = ""
+    
+    # 1. Trích xuất HASHTAGS
+    hash_match2 = re.search(r"(?:\|\|\||\n)?\s*HASHTAGS:\s*(.*)", cleaned_summary, re.IGNORECASE | re.DOTALL)
+    if hash_match2:
+        hashtags = hash_match2.group(1).strip()
+        cleaned_summary = cleaned_summary[:hash_match2.start()].strip()
+        
+    # 1.5 Trích xuất IMPACT
+    imp_match2 = re.search(r"(?:\|\|\||\n)?\s*IMPACT:\s*(.*)", cleaned_summary, re.IGNORECASE | re.DOTALL)
+    if imp_match2:
+        impact = imp_match2.group(1).strip()
+        cleaned_summary = cleaned_summary[:imp_match2.start()].strip()
+        
+    # 2. Thử tách đoạn vắn đầu tiên làm Headline
+    lines = [line.strip() for line in cleaned_summary.split('\n') if line.strip()]
+    if len(lines) >= 2:
+        headline = lines[0].strip("*").strip('"').replace("HEADLINE:", "").strip()
+        summary = "\n\n".join(lines[1:]).replace("SUMMARY:", "").strip()
+    else:
+        # Trường hợp xấu nhất hệ thống không thể bóc tách (Tránh bị empty string)
+        headline = "Bản tin vắn tắt"
+        summary = cleaned_summary.replace("SUMMARY:", "").strip()
+        
+    return {
+        "headline": headline,
+        "summary": summary,
+        "impact": impact,
+        "hashtags": hashtags
+    }
 
 def _call_openai(system_prompt: str, user_prompt: str, attempt: int) -> Optional[str]:
     """Call OpenAI API."""

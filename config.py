@@ -271,7 +271,7 @@ PROMPT_TEMPLATES = {
     "EXPRESS": (
         "You rewrite breaking news for a Telegram crypto channel.\n"
         "Rules:\n"
-        "- Vietnamese only.\n"
+        "- Vietnamese only. Translate 'cryptocurrency' as 'tiền mã hóa'.\n"
         "- Focus on the core event.\n"
         "- Be fast, concise, urgent.\n"
         "- Do NOT invent facts.\n"
@@ -285,7 +285,7 @@ PROMPT_TEMPLATES = {
         "You are a neutral macro and technology news reporter for the crypto ecosystem.\n"
         "Analyze the provided article (title + summary).\n"
         "Rules:\n"
-        "- Vietnamese only.\n"
+        "- Vietnamese only. Translate 'cryptocurrency' as 'tiền mã hóa'.\n"
         "- Use only given information. Do NOT invent facts.\n"
         "- Tone guideline: factual, neutral, event-focused, no market commentary.\n"
         "- STRICT: Do not speculate about future price direction. Do not give investment advice.\n"

@@ -47,11 +47,15 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
     
     headline = struct.get("headline", "")
     summary = struct.get("summary", "")
+    impact = struct.get("impact", "")
     hashtags = struct.get("hashtags", "")
     link = article.get("link", "")
     
-    if not headline and not summary:
-        # Fallback to pure string if LLM prompt parser failed
+    # Chuẩn bị block IMPACT nếu có (AI có thể trả về 'Chưa rõ tác động')
+    impact_text = f"\n\n💡 IMPACT: {impact}" if impact else ""
+    
+    if not headline:
+        # Fallback to pure string if LLM prompt parser failed completely
         if platform == "twitter":
             return fallback
         if lane == "EXPRESS":
@@ -59,18 +63,20 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
         return f"📝 {fallback}\n\n🔗 {link}"
         
     if platform == "twitter":
-        content = f"{headline}\n\n{summary}\n\n{hashtags}"
+        content = f"{headline}\n\n{summary}{impact_text}"
+        if hashtags:
+            content += f"\n\n{hashtags}"
         return truncate_tweet_safely(content, TWITTER_CONFIG["target_length"], TWITTER_CONFIG["hard_max_length"])
     elif platform == "telegram":
         if lane == "EXPRESS":
-            return f"🚨 <b>{headline}</b>\n\n{summary}\n\n{hashtags}"
+            return f"🚨 <b>{headline}</b>\n\n{summary}{impact_text}"
         # RSS Default
-        return f"📝 <b>{headline}</b>\n\n{summary}\n\n{hashtags}\n\n🔗 <a href='{link}'>Đọc bài gốc</a>"
+        return f"📝 <b>{headline}</b>\n\n{summary}{impact_text}\n\n🔗 <a href='{link}'>Đọc bài gốc</a>"
     elif platform == "facebook":
         if lane == "EXPRESS":
-            return f"🚨 {headline}\n\n{summary}\n\n{hashtags}"
+            return f"🚨 {headline}\n\n{summary}{impact_text}"
         # RSS Default
-        return f"📝 {headline}\n\n{summary}\n\n{hashtags}\n\n🔗 {link}"
+        return f"📝 {headline}\n\n{summary}{impact_text}\n\n🔗 {link}"
     return fallback
 
 # --- PUBLISHERS PLUGIN REGISTRY ---
