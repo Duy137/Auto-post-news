@@ -48,7 +48,18 @@ class ExpressListener:
             logger.error(f"Invalid api_id format: {self.api_id}. It must be an integer.")
             return
             
-        self.client = TelegramClient('express_session', api_id_int, self.api_hash)
+        from telethon.sessions import StringSession
+        from config import DATA_DIR
+        import os
+        
+        string_session_val = os.environ.get("TG_STRING_SESSION")
+        if string_session_val:
+            logger.info("Using StringSession from Environment variables for Cloud Deployment.")
+            self.client = TelegramClient(StringSession(string_session_val), api_id_int, self.api_hash)
+        else:
+            logger.info("Using local File Session.")
+            session_path = os.path.join(DATA_DIR, 'express_session')
+            self.client = TelegramClient(session_path, api_id_int, self.api_hash)
         
         # Đăng ký hàm xử lý sự kiện khi có tin nhắn mới tới source_channel
         @self.client.on(events.NewMessage(chats=self.source_channel))
