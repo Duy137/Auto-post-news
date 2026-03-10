@@ -113,8 +113,6 @@ MACRO_GEOPOLITICS_WEIGHTS: Dict[str, float] = {
     r'\bmilitary\b': 20.0,
     r'\bđối thoại\b': 20.0,
     r'\btuyên bố\b': 20.0,
-    r'\bdầu\b': 20.0,
-    r'\boil\b': 20.0,
     r'\battack\b': 20.0,
     r'\bxăng\b': 20.0,
     r'\bthương mại\b': 20.0,
