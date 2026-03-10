@@ -4,186 +4,191 @@ from typing import Dict, Tuple
 
 logger = logging.getLogger("EXPRESS_FILTER")
 
-# Từ khóa trọng số (Weight Mapping)
-# Điểm số có thể âm để phạt các tin giả/tin rác
-KEYWORD_WEIGHTS: Dict[str, float] = {
-    # Tích cực / Quan trọng cao (Toàn cầu)
-    r'\bhack(ed)?\b': 100.0,
-    r'\bbị hack\b': 100.0,
-    r'\bexploit(ed)?\b': 100.0,
-    r'\btấn công\b': 80.0,
-    r'\bl[ỗổ]? hổng\b': 80.0,
+# Từ khóa CỐT LÕI (Luôn điểm cao, qua luôn màng lọc)
+CRYPTO_CORE_WEIGHTS: Dict[str, float] = {
+    # Hack/Exploit
+    r'\bhack(ed)?\b': 30,
+    r'\bbị hack\b': 30,
+    r'\bexploit(ed)?\b': 30,
+    r'\btấn công\b': 30,
+    r'\bl[ỗổ]? hổng\b': 30,
+    r'\bstolen\b': 30,
+    r'\bdrain(ed)?\b': 30,
+    r'\brút ruột\b': 30,
+    r'\b51% attack\b': 30,
+    r'\brug pull(ed)?\b': 30,
+    r'\blừa đảo\b': 30,
     
-    r'\bbankrupt(cy)?\b': 80.0,
-    r'\bphá sản\b': 80.0,
-    r'\bchặn rút\b': 70.0,
-    r'\bđóng băng\b': 70.0,
-    r'\b(suspend|halt).*withdraw(al|s)?\b': 70.0,
+    # Operations
+    r'\bbankrupt(cy)?\b': 30,
+    r'\bphá sản\b': 30,
+    r'\bchặn rút\b': 30,
+    r'\bđóng băng\b': 30,
+    r'\b(suspend|halt).*withdraw(al|s)?\b': 30,
+    r'\bsập sàn\b': 30,
     
-    r'\betf\b': 50.0,
-    r'\bsec\b': 50.0,
-    
-    r'\bapprov(ed|al)?\b': 30.0,
-    r'\bduyệt\b': 30.0,
-    r'\bthông qua\b': 30.0,
-    
-    r'\blisting\b': 30.0,
-    r'\bniêm yết\b': 30.0,
-    r'\blên sàn\b': 30.0,
-    
-    r'\bdelist(ing|ed)?\b': 40.0,
-    r'\bhủy niêm yết\b': 40.0,
-    r'\bxóa khỏi sàn\b': 40.0,
-    
-    r'\ba[ií]rdrop\b': 10.0,
-    r'\btrả thưởng\b': 10.0,
-    
-    r'\bmainnet\b': 20.0,
+    # Regulations & Core Crypto Events
+    r'\betf\b': 30,
+    r'\bsec\b': 30,
+    r'\bapprov(ed|al)?\b': 30,
+    r'\bduyệt\b': 30,
+    r'\bthông qua\b': 30,
+    r'\blisting\b': 30,
+    r'\bniêm yết\b': 30,
+    r'\blên sàn\b': 30,
+    r'\bdelist(ing|ed)?\b': 30,
+    r'\bhủy niêm yết\b': 30,
+    r'\bxóa khỏi sàn\b': 30,
+    r'\ba[ií]rdrop\b': 20,
+    r'\btrả thưởng\b': 20,
+    r'\bmainnet\b': 30,
     r'\bupgrade\b': 20.0,
     r'\bnâng cấp\b': 20.0,
     r'\bhard fork\b': 20.0,
     r'\bphân nhánh\b': 20.0,
     r'\bhalving\b': 20.0,
     r'\bchia đôi\b': 20.0,
-    
     r'\bpartnership\b': 20.0,
     r'\bhợp tác\b': 20.0,
     r'\bintegrate(d)?\b': 20.0,
     r'\btích hợp\b': 20.0,
     
-    r'\bstolen\b': 80.0,
-    r'\bdrain(ed)?\b': 80.0,
-    r'\brút ruột\b': 80.0,
-    r'\b51% attack\b': 100.0,
-    r'\brug pull(ed)?\b': 100.0,
-    r'\blừa đảo\b': 80.0,
-    r'\bsập sàn\b': 100.0,
-    
-    # Kinh tế Vĩ Mô (Macro) / Chính trị (Politics)
-    # Lạm phát & Lãi suất
-    r'\bcpi\b': 60.0,
-    r'\bpce\b': 60.0,
-    r'\bppi\b': 50.0,
-    r'\blạm phát\b': 60.0,
-    r'\binflation\b': 60.0,
-    r'\blãi suất\b': 60.0,
-    r'\binterest rate(s)?\b': 60.0,
-    
-    # Định chế tài chính
-    r'\bfed\b': 50.0,
-    r'\bfomc\b': 50.0,
-    r'\bcục dự trữ\b': 40.0,
-    r'\becb\b': 40.0,
-    r'\bboj\b': 40.0,
-    
-    # Dữ liệu kinh tế (Employment, GDP, PMI)
-    r'\bgdp\b': 40.0,
-    r'\bpmi\b': 40.0,
-    r'\bthất nghiệp\b': 40.0,
-    r'\bunemployment\b': 40.0,
-    r'\bnonfarm\b': 40.0,
-    r'\bpayroll(s)?\b': 40.0,
-    r'\bviệc làm\b': 40.0,
-    
-    # Bầu cử & Lãnh đạo
-    r'\bbầu cử\b': 50.0,
-    r'\belection(s)?\b': 50.0,
-    r'\btổng thống\b': 40.0,
-    r'\bpresident\b': 30.0,
-    r'\bthủ tướng\b': 30.0,
-    
-    # Chiến tranh & Địa chính trị (Geopolitics)
-    r'\bchiến tranh\b': 80.0,
-    r'\bwar\b': 80.0,
-    r'\bxung đột\b': 70.0,
-    r'\bconflict\b': 70.0,
-    r'\btên lửa\b': 70.0,
-    r'\bmissile(s)?\b': 70.0,
-    r'\bkhông kích\b': 60.0,
-    r'\bairstrike(s)?\b': 60.0,
-    r'\bcăng thẳng\b': 40.0,
-    r'\btension(s)?\b': 40.0,
-    r'\bquân đội\b': 40.0,
-    r'\bmilitary\b': 40.0,
-    
-    # Quốc gia, Tổ chức & Điểm nóng địa chính trị
-    r'\bmỹ\b': 30.0, r'\bmĩ\b': 30.0, r'\busa\b': 30.0, r'\bus\b': 30.0, r'\bhoa kỳ\b': 30.0,
-    r'\bnga\b': 40.0, r'\brussia\b': 40.0, r'\bputin\b': 40.0,
-    r'\bukraine\b': 40.0, r'\bzelensky\b': 30.0,
-    r'\bisrael\b': 50.0, r'\biran\b': 50.0,
-    r'\bpalestine\b': 50.0, r'\bgaza\b': 50.0, r'\bhamas\b': 60.0, r'\bhezbollah\b': 60.0,
-    r'\blebanon\b': 50.0, r'\bli-băng\b': 50.0,
-    r'\bsyria\b': 40.0, r'\byemen\b': 40.0, r'\bhouthi\b': 50.0, r'\biraq\b': 40.0,
-    r'\btrung đông\b': 60.0, r'\bmiddle east\b': 60.0, r'\bchâu á\b': 40.0, r'\basia\b': 40.0,
-    r'\btrung quốc\b': 30.0, r'\bchina\b': 30.0, r'\bbắc kinh\b': 20.0, r'\bbeijing\b': 20.0,
-    r'\bhàn quốc\b': 30.0, r'\bsouth korea\b': 30.0, r'\beurozone\b': 40.0, r'\bchâu âu\b': 40.0,
-    r'\bbắc triều tiên\b': 40.0, r'\bnorth korea\b': 40.0, r'\btriều tiên\b': 40.0, r'\bbình nhưỡng\b': 30.0,
-    r'\bđài loan\b': 40.0, r'\btaiwan\b': 40.0,
-    r'\bnhật bản\b': 20.0, r'\bjapan\b': 20.0,
-    r'\bpháp\b': 20.0, r'\bfrance\b': 20.0, r'\bđức\b': 20.0, r'\bgermany\b': 20.0, r'\banh\b': 20.0, r'\buk\b': 20.0,
-    r'\bliên minh châu âu\b': 30.0, r'\beu\b': 30.0,
-    r'\bnato\b': 50.0,
-    r'\bliên hợp quốc\b': 30.0, r'\bun\b': 30.0,
-    
-    # Chính sách, Lệnh cấm
-    r'\bcấm\b': 50.0,
-    r'\bban\b': 50.0,
-    r'\b(luật|quy định|regulation|policy)\b': 30.0,
-    r'\bcấm vận\b': 60.0,
-    r'\bsanction(s)?\b': 60.0,
-    
-    # Tiền tệ & Thanh khoản
-    r'\bkích thích\b': 40.0,
-    r'\bstimulus\b': 40.0,
-    r'\bbơm tiền\b': 40.0,
-    r'\bin tiền\b': 40.0,
-    r'\bprint(ing)? money\b': 40.0,
-    
-    # Kèo mõm, suy đoán (Phạt điểm)
-    # r'\brumor(s)?\b': -20.0,
-    # r'\btin đồn\b': -20.0,
-    # r'\b(think|believe)s?\b': -10.0,
-    # r'\bnghĩ rằng\b': -10.0,
-    # r'\b(could|might|maybe)\b': -5.0,
-    # r'\bcó thể\b': -5.0,
-    # r'\b(probably)\b': -5.0,
-    # r'\bnhiều khả năng\b': -5.0,
-    
-    # Quảng cáo lộ liễu
+    # SPAM / JUNK Penalties
     r'\b(giveaway|join|subscribe)\b': -50.0,
     r'\btham gia ngay\b': -50.0,
     r'\bnhận quà\b': -50.0,
 }
 
+# Các sự kiện VĨ MÔ & ĐỊA CHÍNH TRỊ (Các từ kinh tế đủ điểm qua chốt, các từ địa chính trị vẫn cần mix thêm Entity)
+MACRO_GEOPOLITICS_WEIGHTS: Dict[str, float] = {
+    # Kinh tế vĩ mô (Tăng lên >= 15.0 để qua màng lọc độc lập)
+    r'\bcpi\b': 20.0,
+    r'\bpce\b': 20.0,
+    r'\bppi\b': 20.0,
+    r'\blạm phát\b': 20.0,
+    r'\binflation\b': 20.0,
+    r'\blãi suất\b': 20.0,
+    r'\binterest rate(s)?\b': 20.0,
+    r'\bgdp\b': 20.0,
+    r'\bpmi\b': 20.0,
+    r'\bthất nghiệp\b': 20.0,
+    r'\bunemployment\b': 20.0,
+    r'\bnonfarm\b': 20.0,
+    r'\bpayroll(s)?\b': 20.0,
+    r'\bviệc làm\b': 20.0,
+    r'\bkích thích\b': 20.0,
+    r'\bstimulus\b': 20.0,
+    r'\bbơm tiền\b': 20.0,
+    r'\bin tiền\b': 20.0,
+    r'\bprint(ing)? money\b': 20.0,
+    
+    # Chính sách
+    r'\bcấm\b': 20.0,
+    r'\bban\b': 20.0,
+    r'\b(luật|quy định|regulation|policy)\b': 20.0,
+    r'\bcấm vận\b': 20.0,
+    r'\bsanction(s)?\b': 20.0,
+    
+    # Địa chính trị (Giữ điểm 10.0 để chờ ghép cặp Entity -> 60.0 điểm)
+    r'\bbầu cử\b': 20.0,
+    r'\belection(s)?\b': 20.0,
+    r'\btổng thống\b': 20.0,
+    r'\bpresident\b': 20.0,
+    r'\bthủ tướng\b': 20.0,
+    r'\bchiến tranh\b': 20.0,
+    r'\bwar\b': 20.0,
+    r'\bxung đột\b': 20.0,
+    r'\bconflict\b': 20.0,
+    r'\btên lửa\b': 20.0,
+    r'\bmissile(s)?\b': 20.0,
+    r'\bkhông kích\b': 20.0,
+    r'\bairstrike(s)?\b': 20.0,
+    r'\bcăng thẳng\b': 20.0,
+    r'\btension(s)?\b': 20.0,
+    r'\bquân đội\b': 20.0,
+    r'\bmilitary\b': 20.0,
+    r'\đối thoại\b': 20.0,
+    r'\tuyên bố\b': 20.0,
+}
+
+# CÁC QUỐC GIA, TỔ CHỨC VÀ ĐỊNH CHẾ TÀI CHÍNH (Tăng lên 10.0 theo ý Sếp)
+ENTITIES_WEIGHTS: Dict[str, float] = {
+    # Các tổ chức tài chính hàng đầu (Qua chốt độc lập)
+    r'\bfed\b': 20.0,
+    r'\bfomc\b': 20.0,
+    r'\bcục dự trữ\b': 20.0,
+    r'\becb\b': 20.0,
+    r'\bboj\b': 20.0,
+    
+    # Quốc gia và Tổ chức (10.0)
+    r'\bmỹ\b': 10.0, r'\bmĩ\b': 10.0, r'\busa\b': 10.0, r'\bus\b': 10.0, r'\bhoa kỳ\b': 10.0,
+    r'\bnga\b': 10.0, r'\brussia\b': 10.0, r'\bputin\b': 10.0,
+    r'\bukraine\b': 10.0, r'\bzelensky\b': 10.0,
+    r'\bisrael\b': 10.0, r'\biran\b': 15.0,
+    r'\bpalestine\b': 10.0, r'\bgaza\b': 10.0, r'\bhamas\b': 10.0, r'\bhezbollah\b': 10.0,
+    r'\blebanon\b': 10.0, r'\bli-băng\b': 10.0,
+    r'\bsyria\b': 10.0, r'\byemen\b': 10.0, r'\bhouthi\b': 10.0, r'\biraq\b': 10.0,
+    r'\btrung đông\b': 15.0, r'\bmiddle east\b': 10.0, r'\bchâu á\b': 10.0, r'\basia\b': 10.0,
+    r'\btrung quốc\b': 10.0, r'\bchina\b': 10.0, r'\bbắc kinh\b': 10.0, r'\bbeijing\b': 10.0,
+    r'\bhàn quốc\b': 10.0, r'\bsouth korea\b': 10.0, r'\beurozone\b': 10.0, r'\bchâu âu\b': 10.0,
+    r'\bbắc triều tiên\b': 10.0, r'\bnorth korea\b': 10.0, r'\btriều tiên\b': 10.0, r'\bbình nhưỡng\b': 10.0,
+    r'\bđài loan\b': 10.0, r'\btaiwan\b': 10.0,
+    r'\bnhật bản\b': 10.0, r'\bjapan\b': 10.0,
+    r'\bpháp\b': 10.0, r'\bfrance\b': 10.0, r'\bđức\b': 10.0, r'\bgermany\b': 10.0, r'\banh\b': 10.0, r'\buk\b': 10.0,
+    r'\bliên minh châu âu\b': 10.0, r'\beu\b': 10.0,
+    r'\bnato\b': 10.0,
+    r'\bliên hợp quốc\b': 10.0, r'\bun\b': 10.0,
+}
+
 # Ngưỡng điểm tối thiểu để tin được coi là có giá trị và đưa cho LLM xử lý
 EXPRESS_SCORE_THRESHOLD = 15.0
+SYNERGY_BONUS = 50.0  # Điểm cộng thêm khi có cả Macro và Entity
+
+def process_dict(text: str, weight_dict: Dict[str, float]) -> Tuple[float, dict]:
+    """Helper để quét dictionary và tính điểm."""
+    score = 0.0
+    matches_found = {}
+    for pattern, weight in weight_dict.items():
+        matches = set(re.findall(pattern, text))
+        if matches:
+            display_name = pattern.strip(r'\b')
+            score += weight
+            matches_found[display_name] = weight
+    return score, matches_found
 
 def score_express_message(text: str) -> Tuple[bool, float, dict]:
     """
-    Chấm điểm nội dung tin Telegram dựa trên Keyword Weights.
+    Chấm điểm nội dung tin Telegram dựa trên Context-Aware Keyword Weights.
     Trả về: (is_passed, total_score, matched_keywords)
     """
     total_score = 0.0
     matched_keywords = {}
-    
-    # Chuẩn hóa: lowercase để dễ match
     normalized_text = text.lower()
     
-    for pattern, weight in KEYWORD_WEIGHTS.items():
-        # Tìm tất cả những chỗ match regex
-        # Dùng set() để lỡ nó nhắc từ "hack" 3 lần thì mình chỉ tính điểm 1 lần (Tránh cố ý nhồi nhét keyword)
-        matches = set(re.findall(pattern, normalized_text))
+    # 1. Quét Core Crypto
+    core_score, core_matches = process_dict(normalized_text, CRYPTO_CORE_WEIGHTS)
+    total_score += core_score
+    matched_keywords.update(core_matches)
+    
+    # 2. Quét Macro Geopolitics
+    macro_score, macro_matches = process_dict(normalized_text, MACRO_GEOPOLITICS_WEIGHTS)
+    total_score += macro_score
+    matched_keywords.update(macro_matches)
+    
+    # 3. Quét Entities
+    entity_score, entity_matches = process_dict(normalized_text, ENTITIES_WEIGHTS)
+    total_score += entity_score
+    matched_keywords.update(entity_matches)
+    
+    # 4. Kiểm tra Synergy Bonus (Bối cảnh 2 yếu tố)
+    has_macro = len(macro_matches) > 0
+    has_entity = len(entity_matches) > 0
+    
+    if has_macro and has_entity:
+        total_score += SYNERGY_BONUS
+        matched_keywords['SYNERGY_BONUS (Macro+Entity)'] = SYNERGY_BONUS
         
-        if matches:
-            # Chọn đại diện 1 match để log
-            matched_str = list(matches)[0] 
-            # Nếu regex là group e.g (ed)? nó có thể trả về string rỗng cho match, lấy pattern làm tên
-            display_name = pattern.strip(r'\b')
-            
-            total_score += weight
-            matched_keywords[display_name] = weight
-            
-    # Bổ sung điểm thưởng cho các tín hiệu đặc biệt (Ví dụ có dấu chấm than, viết HOA nhiều báo hiệu tin giật gân)
+    # Bổ sung điểm thưởng cho các tín hiệu đặc biệt
     if '!' in text:
         total_score += 5.0
         matched_keywords['has_exclamation'] = 5.0

@@ -299,17 +299,24 @@ LLM_PROMPT_CONFIG = {
 # Cho phép override Prompt theo (lane, platform) trong tương lai. Default theo lane.
 PROMPT_TEMPLATES = {
     "EXPRESS": (
-        "You rewrite breaking news for a Telegram crypto channel.\n"
-        "Rules:\n"
+        "You rewrite breaking news for a Telegram crypto news channel.\n"
+        "\n"
+        "Style rules:\n"
         "- Vietnamese only. Translate 'cryptocurrency' as 'tiền mã hóa'.\n"
-        "- Focus on the core event.\n"
-        "- Be fast, concise, urgent.\n"
+        "- Use a neutral, professional news tone.\n"
+        "- Headline must be factual, short, and descriptive.\n"
+        "- Do NOT use sensational words such as: 'TIN NÓNG', 'KHẨN CẤP', 'BREAKING', 'ALERT', 'CỰC NÓNG'.\n"
+        "- Focus only on the core event.\n"
+        "- Be concise and clear.\n"
         "- Do NOT invent facts.\n"
-        "- If crypto-related, add one short possible market implication.\n"
-        "- Use cautious wording: 'có thể', 'thị trường có thể phản ứng'.\n"
-        "- If unrelated to crypto markets -> IMPACT: 'Chưa rõ tác động'\n"
-        "Output format:\n"
-        "HEADLINE: <title>|||SUMMARY: <1-2 lines>|||IMPACT: <short implication or 'Chưa rõ tác động'>"
+        "\n"
+        "Market context rule:\n"
+        "- If the news is crypto-related, add one short possible market implication.\n"
+        "- Use cautious wording such as: 'có thể', 'thị trường có thể phản ứng'.\n"
+        "- If unrelated to crypto markets -> IMPACT: 'Chưa rõ tác động'.\n"
+        "\n"
+        "Output format (strict):\n"
+        "HEADLINE: <short factual headline>|||SUMMARY: <1-2 concise sentences>|||IMPACT: <market implication or 'Chưa rõ tác động'>"
     ),
     "RSS": (
         "You are a neutral macro and technology news reporter for the crypto ecosystem.\n"

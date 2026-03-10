@@ -51,8 +51,10 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
     hashtags = struct.get("hashtags", "")
     link = article.get("link", "")
     
-    # Chuẩn bị block IMPACT nếu có (AI có thể trả về 'Chưa rõ tác động')
-    impact_text = f"\n\n💡 TÁC ĐỘNG: {impact}" if impact else ""
+    # Chuẩn bị block IMPACT nếu có (ẩn đi nếu AI trả về 'Chưa rõ tác động')
+    impact_text = ""
+    if impact and "chưa rõ tác động" not in impact.lower():
+        impact_text = f"\n\n💡 TÁC ĐỘNG: {impact}"
     
     if not headline:
         # Fallback to pure string if LLM prompt parser failed completely
