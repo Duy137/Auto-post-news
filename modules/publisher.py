@@ -52,7 +52,7 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
     link = article.get("link", "")
     
     # Chuẩn bị block IMPACT nếu có (AI có thể trả về 'Chưa rõ tác động')
-    impact_text = f"\n\n💡 IMPACT: {impact}" if impact else ""
+    impact_text = f"\n\n💡 TÁC ĐỘNG: {impact}" if impact else ""
     
     if not headline:
         # Fallback to pure string if LLM prompt parser failed completely
