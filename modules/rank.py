@@ -25,6 +25,16 @@ def clean_text(text: str) -> str: #Chà nhám văn bản (xóa dấu phẩy, vi�
     if not text: return ""
     return re.sub(r'[^a-zA-Z0-9\s]', ' ', text.lower())
 
+def detect_entities(text: str, entity_list: List[str]) -> bool:
+    """Detect presence of major tokens or exchanges using word boundaries."""
+    text_lower = text.lower()
+    for entity in entity_list:
+        # Avoid matching substrings like "dot" in "polkadot" accidentally, though entity_list should be distinct.
+        pattern = r"\b" + re.escape(entity.lower()) + r"\b"
+        if re.search(pattern, text_lower):
+            return True
+    return False
+
 def get_adaptive_keyword_weight(keyword: str, base_weight: float, kw_freqs: Dict[str, int]) -> float:
     # Lấy freq thực tế trong 24h, nếu không có thì lấy baseline cấy sẵn.
     freq = kw_freqs.get(keyword)
@@ -35,13 +45,15 @@ def get_adaptive_keyword_weight(keyword: str, base_weight: float, kw_freqs: Dict
     penalty = 1.0 / math.log10(freq + 10)
     return base_weight * penalty
 
-def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, int]) -> Tuple[float, float, List[str]]:
-    """Tính Keyword Score adaptive bằng Regex Boundary. Trả về (Positive_Score, Penalty_Score, List_Words)."""
+def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, int]) -> Tuple[float, float, List[str], float]:
+    """Tính Keyword Score adaptive bằng Regex Boundary. Trả về (Positive_Score, Penalty_Score, List_Words, Token_Modifier)."""
     text = f"{title} {summary}".lower()
     
     positive_score = 0.0
     penalty_score = 0.0
     found_keywords = []
+    has_market_moving = False
+    has_price_analysis = False
     
     # 1. Quét các rổ từ khóa tiêu chuẩn
     for cat, base_w in SCORING_WEIGHTS["keyword_caps"].items():
@@ -57,6 +69,11 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
                 else:
                     cat_score -= w # Trừ điểm mềm (Penalty)
                 found_keywords.append(k)
+                
+                if cat == "market_moving":
+                    has_market_moving = True
+                elif cat == "price_analysis":
+                    has_price_analysis = True
         
         # Áp dụng Giới hạn Trần (Cap) cho từng rổ để tránh lạm phát
         if base_w > 0:
@@ -72,7 +89,18 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
             found_keywords.append(f"TECH_COMPOUND_MATCH")
             break # Chỉ thưởng 1 lần cho cụm công nghệ để tránh lạm phát
 
-    return positive_score, penalty_score, found_keywords
+    # 3. Token-Aware Scoring Module
+    token_modifier = 0.0
+    combined_entities = SCORING_WEIGHTS.get("major_tokens", []) + SCORING_WEIGHTS.get("major_exchanges", [])
+    if detect_entities(f"{title} {summary}", combined_entities):
+        if has_price_analysis:
+            token_modifier = -10.0
+            penalty_score += token_modifier  # Phạt cực nặng bài thầy dùi
+        elif has_market_moving:
+            token_modifier = 2.0
+            positive_score += token_modifier # Thưởng nhẹ để đôn rank bài tin tức thực sự
+
+    return positive_score, penalty_score, found_keywords, token_modifier
 
 def calc_editorial_verb_score(title: str) -> float:
     """Lấy điểm trọng số cộng dồn của các động từ hành động Vĩ mô."""
@@ -194,8 +222,8 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
             continue # Vứt bài này ngay lập tức, không tốn CPU tính điểm nữa
             
         # A. Base Impacts
-        positive_kw_score, penalty_kw_score, words_found = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
-        kw_score = positive_kw_score + penalty_kw_score # kw_score nay chứa cả thưởng và phạt (đã cap)
+        positive_kw_score, penalty_kw_score, words_found, token_modifier = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
+        kw_score = positive_kw_score + penalty_kw_score # kw_score nay chứa cả thưởng và phạt (đã cap) + token_modifier
         keywords_to_log.extend(words_found)
         
         verb_score = calc_editorial_verb_score(art["title"])
@@ -239,12 +267,13 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # [NEW] Tích hợp chi tiết breakdown_log để in ra Console cho dễ debug
         breakdown_log = (
             f"\n📊 [RANKING] Article '{art['title'][:40]}...':\n"
-            f"  - MACRO/TECH_SCORE (+): {positive_kw_score:.2f} (Keywords: {words_found})\n"
-            f"  - EDITORIAL_SCORE  (+): {verb_score:.2f}\n"
-            f"  - PENALTY          (-): {penalty_kw_score:.2f}\n"
-            f"  - VIRAL/SHOCK_MULT (x): {viral_potential:.2f} (Shock:{shock_score:.1f}, Momentum:{momentum_score:.1f})\n"
-            f"  - DECAY_MULT       (x): {decay_mult:.2f}\n"
-            f"  - SOURCE_CRED      (x): {src_cred:.2f}\n"
+            f"  - MACRO/TECH/MARKET (+): {positive_kw_score:.2f} (Keywords: {words_found})\n"
+            f"      * Token Modifier: {token_modifier:+.2f} (Included in above +/i depending on penalty)\n"
+            f"  - EDITORIAL_SCORE   (+): {verb_score:.2f}\n"
+            f"  - PENALTY           (-): {penalty_kw_score:.2f}\n"
+            f"  - VIRAL/SHOCK_MULT  (x): {viral_potential:.2f} (Shock:{shock_score:.1f}, Momentum:{momentum_score:.1f})\n"
+            f"  - DECAY_MULT        (x): {decay_mult:.2f}\n"
+            f"  - SOURCE_CRED       (x): {src_cred:.2f}\n"
         )
         
         # Phase 7: RSS Cooldown Suppression Guard
@@ -266,6 +295,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
             "base_score": base_score,
             "positive_keyword_score": round(positive_kw_score, 2),
             "penalty_keyword_score": round(penalty_kw_score, 2),
+            "token_modifier": round(token_modifier, 2),
             "editorial_verb_score": verb_score,
             "cross_source_momentum_score": momentum_score,
             "source_credibility": src_cred,
@@ -297,25 +327,25 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(message)s')
-    print("\n[MÔ PHỎNG PHASE 3: RANKING ENGINE]")
+    print("\n[RANKING ENGINE SIMULATION]")
     
     # Tụi mình đóng vai các nhà báo :D
     now = int(time.time())
     
     mock_articles: List[Article] = [
-        # Tin 1: Tin mới nổ, báo xịn, cực hot
+        # Tin 1: Tin mới nổ, báo xịn, cực hot, có Token (OKX) + Hành động đầu tư ($100M)
         {
-            "id": "1", "title": "SEC officially approves Bitcoin ETF", "link": "link1", "raw_source_url": "", 
-            "summary": "Massive win for crypto.", 
+            "id": "1", "title": "OKX receives $100M investment from top venture fund", "link": "link1", "raw_source_url": "", 
+            "summary": "Major funding round for the exchange.", 
             "published_ts": now - 3600, # 1h trước
             "source_name": "CoinTelegraph", "score": None, "score_detail": None, "tweet_content": None
         },
-        # Tin 2: Cùng chủ đề Tin 1, nhưng từ báo dỏm, ra trễ hơn xíu -> Momentum Boost kích hoạt cho cả 2.
+        # Tin 2: Mẫu thầy dùi, có điểm trừ nặng.
         {
-            "id": "2", "title": "SEC approves BTC ETF today", "link": "link2", "raw_source_url": "", 
-            "summary": "", 
-            "published_ts": now - 7200, # 2h trước
-            "source_name": "UnknownBlog", "score": None, "score_detail": None, "tweet_content": None
+            "id": "2", "title": "Solana could reach $500 next month, analyst predicts", "link": "link2", "raw_source_url": "", 
+            "summary": "SOL price prediction is bullish for Q4.", 
+            "published_ts": now - 3600, # 1h trước
+            "source_name": "CoinDesk", "score": None, "score_detail": None, "tweet_content": None
         },
         # Tin 3: Tin hack khẩn cấp, cực nóng, nhưng từ cách đây 2 ngày (quá cũ)
         {
@@ -324,10 +354,10 @@ if __name__ == "__main__":
             "published_ts": now - (48 * 3600), # 48h trước -> Decay sẽ làm nó chết!
             "source_name": "CoinTelegraph", "score": None, "score_detail": None, "tweet_content": None
         },
-        # Tin 4: Tin bình luận lôm côm từ báo xịn (Không có Event Verbs)
+        # Tin 4: Tin bình thị trường vô thưởng vô phạt (Không có Event Verbs cũng không dự đoán giá gắt)
         {
-            "id": "4", "title": "Why we think the bull run is near", "link": "link4", "raw_source_url": "", 
-            "summary": "Opinion piece.", 
+            "id": "4", "title": "Bitcoin continues to lead the market rally", "link": "link4", "raw_source_url": "", 
+            "summary": "Market shows signs of recovery.", 
             "published_ts": now - 1800, # Vừa đăng xong
             "source_name": "CoinTelegraph", "score": None, "score_detail": None, "tweet_content": None
         }
@@ -337,6 +367,7 @@ if __name__ == "__main__":
     
     import json
     for rank, a in enumerate(ranked):
-        print(f"\n#{rank+1} [Điểm: {a['score']}] - {a['title']}")
-        print(f"  Source: {a['source_name']} | Tuổi: {(now - a['published_ts'])//3600}h")
-        print(f"  Explain: {json.dumps(a['score_detail'])}")
+        print(f"\n#{rank+1} [Score: {a['score']}] - {a['title']}")
+        print(f"  Source: {a['source_name']} | Age: {(now - a['published_ts'])//3600}h")
+        detail_str = json.dumps(a['score_detail'])
+        print(f"  Explain: {detail_str[:150]}..." if len(detail_str) > 150 else f"  Explain: {detail_str}")

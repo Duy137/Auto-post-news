@@ -9,25 +9,17 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models import Article
 from config import LLM_CONFIG, LLM_PROMPT_CONFIG, PROMPT_TEMPLATES
 
-# Dùng thư viện openai bản mới (>=1.0.0)
 from openai import OpenAI, APIConnectionError, APIError, RateLimitError, APITimeoutError
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, RetryError, ServiceUnavailable
+from google.auth.exceptions import DefaultCredentialsError
 
 logger = logging.getLogger(__name__)
-
 ACTIVE_PROVIDER = LLM_CONFIG.get("active_provider", "gemini")
 MAX_RETRIES = LLM_CONFIG["max_retries"]
-TIMEOUT = LLM_CONFIG["timeout_sec"]
 
-# --- SETUP OPENAI ---
-openai_api_key = LLM_CONFIG.get("openai", {}).get("api_key")
-openai_client = OpenAI(api_key=openai_api_key, timeout=TIMEOUT) if ACTIVE_PROVIDER == "openai" and openai_api_key and openai_api_key != "dummy_key_for_test" else None
-
-# --- SETUP GEMINI ---
-gemini_api_key = LLM_CONFIG.get("gemini", {}).get("api_key")
-if ACTIVE_PROVIDER == "gemini" and gemini_api_key and gemini_api_key != "dummy_key_for_test":
-    genai.configure(api_key=gemini_api_key)
+# --- SETUP OPENAI QUOTE STATE (Removed global client, using explicit keys instead) ---
+# --- SETUP GEMINI QUOTE STATE (Removed global config, using explicit keys instead) ---
 
 # Phase 2: Prompt Abstraction Layer
 def get_prompt(lane: str, platform: Optional[str] = None) -> str:
@@ -50,14 +42,21 @@ def get_prompt(lane: str, platform: Optional[str] = None) -> str:
     # 3. Fallback cuối cùng
     return LLM_PROMPT_CONFIG["system_prompt"]
 
-def _get_gemini_model(system_instruction: str):
+def _get_gemini_model(system_instruction: str, model_name: str, api_key: str):
     """Tạo Gemini Model instance với instruction tùy chỉnh động tại runtime."""
-    if ACTIVE_PROVIDER != "gemini" or not gemini_api_key or gemini_api_key == "dummy_key_for_test":
+    if not api_key or api_key == "dummy_key_for_test":
         return None
-    return genai.GenerativeModel(
-        model_name=LLM_CONFIG.get("gemini", {}).get("model", "gemini-2.5-flash"),
-        system_instruction=system_instruction
-    )
+        
+    genai.configure(api_key=api_key)
+        
+    if "gemma" in model_name.lower():
+        # Các model Gemma hiện không hỗ trợ tham số system_instruction qua API
+        return genai.GenerativeModel(model_name=model_name)
+    else:
+        return genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=system_instruction
+        )
 
 def generate_rewrite_prompt(article: Article) -> str:
     """Tạo tin nhắn User Prompt để nạp vào LLM từ Object Article gốc."""
@@ -162,11 +161,15 @@ def parse_structured_output(text: str) -> dict:
         "hashtags": hashtags
     }
 
-def _call_openai(system_prompt: str, user_prompt: str, attempt: int) -> Optional[str]:
+def _call_openai(system_prompt: str, user_prompt: str, api_key: str, model_name: str, timeout: int) -> Optional[str]:
     """Call OpenAI API."""
+    if not api_key or api_key == "dummy_key_for_test":
+        return None
+        
     try:
-        response = openai_client.chat.completions.create(
-            model=LLM_CONFIG.get("openai", {}).get("model", "gpt-3.5-turbo"),
+        temp_client = OpenAI(api_key=api_key, timeout=timeout)
+        response = temp_client.chat.completions.create(
+            model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -176,11 +179,11 @@ def _call_openai(system_prompt: str, user_prompt: str, attempt: int) -> Optional
         )
         return response.choices[0].message.content.strip()
     except RateLimitError:
-        logger.warning("OpenAI Rate Limit Exceeded. Backing off for 10s...")
-        time.sleep(10)
+        logger.warning(f"OpenAI Rate Limit Exceeded on model {model_name}. Marking key as exhausted.")
+        return "RATE_LIMIT"
     except (APIConnectionError, APITimeoutError) as e:
-        logger.warning(f"OpenAI Network/Timeout error: {e}. Retrying...")
-        time.sleep(3)
+        logger.warning(f"OpenAI Network/Timeout error ({timeout}s): {e}.")
+        return "FATAL_ERROR"  # Break inner loop on timeout
     except APIError as e:
         logger.error(f"OpenAI API Error: {e}")
         return "FATAL_ERROR"
@@ -189,77 +192,119 @@ def _call_openai(system_prompt: str, user_prompt: str, attempt: int) -> Optional
         return "FATAL_ERROR"
     return None
 
-def _call_gemini(system_prompt: str, user_prompt: str, attempt: int) -> Optional[str]:
+def _call_gemini(system_prompt: str, user_prompt: str, api_key: str, model_name: str, timeout: int) -> Optional[str]:
     """Call Google Gemini API."""
-    gemini_model = _get_gemini_model(system_prompt)
+    gemini_model = _get_gemini_model(system_prompt, model_name, api_key)
     if not gemini_model:
         return None
         
     try:
+        if "gemma" in model_name.lower():
+            # Ghép prompt thủ công vì Gemma không hỗ trợ tham số system_instruction
+            final_prompt = f"System Rules and Context:\n{system_prompt}\n\nTask:\n{user_prompt}"
+        else:
+            final_prompt = user_prompt
+
         response = gemini_model.generate_content(
-            user_prompt,
+            final_prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=LLM_CONFIG["temperature"]
-            )
+            ),
+            request_options={"timeout": timeout}
         )
         return response.text.strip()
     except ResourceExhausted:
-        logger.warning("Gemini Rate Limit (ResourceExhausted). Backing off for 10s...")
-        time.sleep(10)
+        logger.warning(f"Gemini Rate Limit Exceeded on model {model_name}. Marking key as exhausted.")
+        return "RATE_LIMIT"
+    except DefaultCredentialsError:
+        logger.warning(f"Gemini API Key format invalid bounds.")
+        return "FATAL_ERROR"
     except (RetryError, ServiceUnavailable) as e:
-        logger.warning(f"Gemini Retryable Error: {e}. Retrying...")
-        time.sleep(3)
+        logger.warning(f"Gemini Timeout/ServiceUnavailable ({timeout}s): {e}.")
+        return "FATAL_ERROR" # Break on timeout
     except Exception as e:
+        # Check specifically for generic timeouts often thrown by google API core without specific typing
+        err_str = str(e).lower()
+        if "timeout" in err_str or "deadline" in err_str:
+            logger.warning(f"Gemini generic timeout ({timeout}s): {e}.")
+            return "FATAL_ERROR"
+            
         logger.error(f"Fatal Exception during Gemini Call: {e}")
         return "FATAL_ERROR"
     return None
 
-def call_llm_with_retry(system_prompt: str, user_prompt: str) -> Optional[str]:
-    """Wraps API call with Provider Router, Retry & Error Handling."""
+def call_llm_with_retry(system_prompt: str, user_prompt: str, lane: str = "RSS") -> Optional[str]:
+    """Wraps API call with Provider Router, API Key Rotation, and Model Degradation Fallback."""
+    lane = lane.upper()
+    provider = ACTIVE_PROVIDER
     
-    if ACTIVE_PROVIDER == "openai" and not openai_client:
-        logger.warning("No valid OpenAI API Key defined. Mocking LLM Output.")
-        return "🚨 BREAKING: Mocked tweet content based on rule generation. #Crypto #News"
-    elif ACTIVE_PROVIDER == "gemini" and not LLM_CONFIG.get("gemini", {}).get("api_key") or LLM_CONFIG.get("gemini", {}).get("api_key") == "dummy_key_for_test":
-        logger.warning("No valid Gemini API Key defined. Mocking LLM Output.")
-        return "🚨 BREAKING: Mocked tweet content based on rule generation. #Gemini #Crypto"
+    api_keys = LLM_CONFIG.get(provider, {}).get("api_keys", ["dummy_key_for_test"])
+    models = LLM_CONFIG.get("lane_models", {}).get(lane, [])
+    timeout = LLM_CONFIG.get("lane_timeouts", {}).get(lane, 15)
+    
+    if not models:
+        logger.error(f"No LLM models configured for lane {lane}!")
+        return None
 
-    for attempt in range(MAX_RETRIES + 1):
-        logger.info(f"Calling [ {ACTIVE_PROVIDER.upper()} ] API... (Attempt {attempt+1}/{MAX_RETRIES+1})")
+    if len(api_keys) == 1 and api_keys[0] == "dummy_key_for_test":
+        logger.warning(f"No valid {provider.upper()} API Key defined. Mocking LLM Output.")
+        return f"🚨 BREAKING: Mocked tweet content based on rule generation. #{provider} #Crypto"
+
+    # Outer Loop: Model Fallback
+    for m_idx, current_model in enumerate(models):
+        logger.info(f"--- Establishing LLM Base: Lane={lane} | Model={current_model} | Timeout={timeout}s ---")
         
-        if ACTIVE_PROVIDER == "openai":
-            result = _call_openai(system_prompt, user_prompt, attempt)
-        elif ACTIVE_PROVIDER == "gemini":
-            result = _call_gemini(system_prompt, user_prompt, attempt)
-        else:
-            logger.error(f"Unknown LLM Provider: {ACTIVE_PROVIDER}")
-            return None
-
-        if result == "FATAL_ERROR": # Cứng lỗi token, ko retry
-            break
-        elif result is not None:
-            return result
+        # Inner Loop: Key Rotation
+        for k_idx, current_key in enumerate(api_keys):
+            logger.info(f"[LLM] lane={lane} model={current_model} key_idx={k_idx} -> Executing Call")
             
-    logger.error("Failed to generate tweet after max retries.")
+            if provider == "openai":
+                result = _call_openai(system_prompt, user_prompt, current_key, current_model, timeout)
+            elif provider == "gemini":
+                result = _call_gemini(system_prompt, user_prompt, current_key, current_model, timeout)
+            else:
+                logger.error(f"Unknown LLM Provider: {provider}")
+                return None
+                
+            if result == "RATE_LIMIT":
+                logger.warning(f"[LLM] rate limit detected -> rotating key (exhausted key_idx={k_idx})")
+                continue # Try next key
+                
+            if result == "FATAL_ERROR": # e.g Timeout or Bad Model Config -> Give up on this model early
+                logger.warning(f"[LLM] fatal error/timeout -> breaking key loop, escalating to model fallback.")
+                break 
+                
+            if result is not None:
+                return result
+                
+        # If we reach here, ALL keys for the current model failed.
+        logger.warning(f"[LLM] all keys exhausted for {current_model}.")
+        
+        if m_idx < len(models) - 1:
+            logger.warning(f"[LLM] switching to fallback model {models[m_idx+1]}")
+        else:
+            logger.error(f"[LLM] ALL MODELS EXHAUSTED for lane {lane}.")
+
+    logger.error("Failed to generate tweet after exhausting all keys and all models.")
     return None
 
-def summarize_articles(selected_articles: List[Article]) -> List[Article]:
+def summarize_articles(selected_articles: List[Article], lane: str = "RSS") -> List[Article]:
     """
     Main Phase 5: Gửi từng bài được chọn cho LLM viết lại nội dung.
     """
     if not selected_articles:
         return []
         
-    logger.info(f"Starting Phase 5: Summarizing {len(selected_articles)} top articles.")
+    logger.info(f"Starting Phase 5: Summarizing {len(selected_articles)} top articles for lane {lane.upper()}.")
     
-    system_prompt = get_prompt(lane="RSS")
+    system_prompt = get_prompt(lane=lane)
     processed_articles = []
     
     for rank, article in enumerate(selected_articles):
         logger.info(f"Generatting Tweet for Article #{rank+1} - ID: {article['id']}")
         
         user_prompt = generate_rewrite_prompt(article)
-        result = call_llm_with_retry(system_prompt, user_prompt)
+        result = call_llm_with_retry(system_prompt, user_prompt, lane=lane)
         
         if result:
             article["tweet_content"] = result

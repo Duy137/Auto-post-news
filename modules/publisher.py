@@ -127,9 +127,9 @@ def publish_to_telegram(article: Article, is_dry_run: bool, lane: str = "RSS") -
         return {"success": True, "post_id": f"mock_tg_{int(time.time())}", "error": None}
         
     bot_token = TELEGRAM_CONFIG.get("bot_token")
-    chat_id = TELEGRAM_CONFIG.get("chat_id")
+    chat_id = TELEGRAM_CONFIG.get("chat_ids", {}).get(lane)
     if not bot_token or not chat_id:
-        return {"success": False, "post_id": None, "error": "Missing Telegram API config"}
+        return {"success": False, "post_id": None, "error": f"Missing Telegram API config for lane {lane}"}
         
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {"chat_id": chat_id, "text": content, "parse_mode": "HTML"}

@@ -20,6 +20,15 @@ def reload_config():
     
     # Reload LLM Provider too
     LLM_CONFIG["active_provider"] = os.environ.get("LLM_PROVIDER", "gemini").lower()
+    
+    # Reload API Keys into lists
+    LLM_CONFIG["openai"]["api_keys"] = [k for k in [os.environ.get(f"OPENAI_API_KEY_{i}") for i in range(1, 10)] + [os.environ.get("OPENAI_API_KEY")] if k]
+    if not LLM_CONFIG["openai"]["api_keys"]:
+        LLM_CONFIG["openai"]["api_keys"] = ["dummy_key_for_test"]
+        
+    LLM_CONFIG["gemini"]["api_keys"] = [k for k in [os.environ.get(f"GEMINI_API_KEY_{i}") for i in range(1, 10)] + [os.environ.get("GEMINI_API_KEY")] if k]
+    if not LLM_CONFIG["gemini"]["api_keys"]:
+        LLM_CONFIG["gemini"]["api_keys"] = ["dummy_key_for_test"]
 
 # Mute warnings from Feedparser or any lightweight libs
 import warnings
@@ -146,6 +155,7 @@ class KeywordCategoryConfig(TypedDict):
     price_analysis: List[str]
 
 class KeywordCapConfig(TypedDict):
+    market_moving: float
     urgent: float
     macro_politics: float
     major_tech: float
@@ -155,6 +165,8 @@ class ScoringWeights(TypedDict):
     base_score: float
     keyword_categories: KeywordCategoryConfig
     keyword_caps: KeywordCapConfig
+    major_tokens: List[str]
+    major_exchanges: List[str]
     editorial_verbs: Dict[str, float]
     cross_source_momentum_score: float
     time_decay_lambda_per_hour: float
@@ -168,21 +180,27 @@ SCORING_WEIGHTS: ScoringWeights = {
     # Hàm mũ y=e^(-lambda*x). Lambda 0.05 nghĩa là sau 14h điểm giảm còn 1/2.
     "time_decay_lambda_per_hour": 0.05, 
     
-    # Từ khóa chia làm 4 rổ. Bài tính Max-cap của từng rổ cộng lại.
+    # Từ khóa chia làm các rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {
-        "urgent": ["hack", "scam", "breach", "sues", "arrest", "bankrupt"],
-        "macro_politics": ["regulation", "bill", "legislation", "ban", "approval", "court", "sec", "regulator", "government", "policy", "lawsuit", "fed", "inflation", "cpi", "rate", "etf"],
-        "major_tech": ["mainnet", "protocol", "hard fork", "network", "roadmap", "partnership", "upgrade", "integration", "launch"],
-        "price_analysis": ["predict", "forecast", "analysis", "price prediction", "target", "analyst", "bullish", "bearish"]
+        "market_moving": ["hack", "exploit", "breach", "attack", "security incident", "vulnerability", "fraud", "scam", "rug pull", "theft", "embezzle", "investigation", "probe", "lawsuit", "charges", "indictment", "court", "fine", "settlement", "sanction", "ban", "regulation", "regulatory", "withdrawal halt", "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "funding", "investment", "raises", "raise", "venture funding", "series a", "series b", "series c", "acquire", "acquisition", "merger", "buyout", "token unlock", "unlock", "token burn", "burn", "supply reduction", "inflation change", "listing", "listed", "delist", "delisting", "etf", "etf approval", "approval", "partnership", "collaboration", "integration", "launch", "mainnet launch", "testnet launch", "hard fork", "soft fork", "upgrade", "protocol upgrade", "airdrop", "staking launch", "staking unlock", "buyback", "treasury purchase"],
+        "urgent": ["sues", "arrest"],
+        "macro_politics": ["bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "cpi", "rate"],
+        "major_tech": ["mainnet", "protocol", "network", "roadmap"],
+        "price_analysis": ["price prediction", "price forecast", "price outlook", "analyst predicts", "analysts say", "analysts expect", "bullish", "bearish", "price target", "could reach", "could hit", "expected to", "set to reach", "market outlook", "technical analysis", "chart analysis", "trend analysis", "resistance level", "support level", "price projection", "predict", "forecast", "analysis", "analyst"]
     },
     
     # Điểm Trần (Cap) của từng rổ để tránh lạm phát
     "keyword_caps": {
+        "market_moving": 15.0,
         "urgent": 10.0,
         "macro_politics": 12.0,
         "major_tech": 10.0,
         "price_analysis": -6.0  # Điểm âm (Soft Penalty)
     },
+    
+    # Token-Aware Scoring
+    "major_tokens": ["BTC", "Bitcoin", "ETH", "Ethereum", "BNB", "SOL", "Solana", "XRP", "Ripple", "ADA", "Cardano", "DOGE", "Dogecoin", "TRX", "Tron", "DOT", "Polkadot", "LTC", "Litecoin", "SHIB", "UNI", "Uniswap", "AVAX", "Avalanche", "MATIC", "Polygon", "LINK", "Chainlink", "APT", "Aptos", "ARB", "Arbitrum", "OP", "Optimism", "SUI", "INJ", "Injective", "NEAR", "ATOM", "Cosmos", "FTM", "Fantom", "AAVE", "MKR", "OKB"],
+    "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Gemini", "Bitstamp"],
     
     # Compound Regex for specific tech assets (Sử dụng trong rank.py, cấu hình ở đây cho dễ quản lý)
     "compound_tech_regexes": [
@@ -229,24 +247,36 @@ SCORING_WEIGHTS: ScoringWeights = {
 }
 
 # --- CẤU HÌNH CHO PHASE 5: TÓM TẮT & TWEET ---
+
+# Khai báo sẵn danh sách API Keys nếu có (tránh rỗng)
+_openai_keys = [k for k in [os.environ.get(f"OPENAI_API_KEY_{i}") for i in range(1, 10)] + [os.environ.get("OPENAI_API_KEY")] if k]
+_gemini_keys = [k for k in [os.environ.get(f"GEMINI_API_KEY_{i}") for i in range(1, 10)] + [os.environ.get("GEMINI_API_KEY")] if k]
+
 LLM_CONFIG = {
     # Chọn nhà cung cấp: "openai" hoặc "gemini"
     "active_provider": os.environ.get("LLM_PROVIDER", "gemini").lower(),
     
     "openai": {
-        "api_key": os.environ.get("OPENAI_API_KEY", "dummy_key_for_test"),
-        "model": "gpt-3.5-turbo",
+        "api_keys": _openai_keys if _openai_keys else ["dummy_key_for_test"],
     },
     
     "gemini": {
-        "api_key": os.environ.get("GEMINI_API_KEY", "dummy_key_for_test"),
-        "model": "gemini-2.5-flash", # Nâng cấp lên model Gemini 2.5 Flash mới nhất
+        "api_keys": _gemini_keys if _gemini_keys else ["dummy_key_for_test"],
+    },
+    
+    "lane_models": {
+        "RSS": ["gemini-2.5-flash", "gemma-3-27b-it"],        # Fallback hierarchy for RSS
+        "EXPRESS": ["gemma-3-27b-it"]                         # Fixed model for Express
+    },
+    
+    "lane_timeouts": {
+        "RSS": 15,       # Seconds: Standard timeout for RSS pool
+        "EXPRESS": 8     # Seconds: Strict timeout to prevent blocking listener
     },
     
     "max_tokens": 150,
     "temperature": 0.3, # Giữ temperature thấp để tránh AI "ảo giác" (hallucination)
-    "timeout_sec": 15,
-    "max_retries": 2
+    "max_retries": 2  # Hard limit per pipeline
 }
 
 LLM_PROMPT_CONFIG = {
@@ -277,7 +307,7 @@ PROMPT_TEMPLATES = {
         "- Do NOT invent facts.\n"
         "- If crypto-related, add one short possible market implication.\n"
         "- Use cautious wording: 'có thể', 'thị trường có thể phản ứng'.\n"
-        "- If unrelated to crypto markets → IMPACT: 'Chưa rõ tác động'\n"
+        "- If unrelated to crypto markets -> IMPACT: 'Chưa rõ tác động'\n"
         "Output format:\n"
         "HEADLINE: <title>|||SUMMARY: <1-2 lines>|||IMPACT: <short implication or 'Chưa rõ tác động'>"
     ),
@@ -335,7 +365,11 @@ TWITTER_CONFIG = {
 # --- CẤU HÌNH CHO PHASE 6: PUBLISHER (TELEGRAM) ---
 TELEGRAM_CONFIG = {
     "bot_token": os.environ.get("TELEGRAM_BOT_TOKEN", ""),
-    "chat_id": os.environ.get("TELEGRAM_CHAT_ID", ""),
+    "chat_ids": {
+        # Nếu có TELEGRAM_CHAT_ID_RSS trong .env thì lấy, không thì lấy chung TELEGRAM_CHAT_ID
+        "RSS": os.environ.get("TELEGRAM_CHAT_ID_RSS", os.environ.get("TELEGRAM_CHAT_ID", "")),
+        "EXPRESS": os.environ.get("TELEGRAM_CHAT_ID_EXPRESS", os.environ.get("TELEGRAM_CHAT_ID", ""))
+    }
 }
 
 # --- CẤU HÌNH CHO PHASE 6: PUBLISHER (FACEBOOK) ---

@@ -123,8 +123,9 @@ Sự thông minh của Bot nằm ở file `config.py`. Bạn hoàn toàn đượ
 
 ### 1. Dạy Bot bắt "Từ Khóa Vàng" (Mục `SCORING_WEIGHTS`)
 Hãy định nghĩa lại thế giới quan của Bot:
-- **`keyword_categories`**: Bạn làm mảng AI? Thêm chữ `"chatgpt", "openai", "claude"` vào mục `major`.
-- **`keyword_caps`**: Chỉnh điểm. Từ khóa `urgent` xứng đáng 10 điểm, tin rác dính vào là auto chìm.
+- **`keyword_categories`**: Đây là rổ từ khóa. Ví dụ các từ khóa thuộc nhóm `market_moving` (như "hack", "funding", "listing") sẽ được điểm rất cao. Nhóm `price_analysis` (như "analyst predicts", "price target") sẽ bị điểm âm.
+- **`keyword_caps`**: Chỉnh điểm trần. Từ khóa `market_moving` xứng đáng lọt top được cấp dải điểm rộng (15.0).
+- **`major_tokens` / `major_exchanges`**: Đây là bộ lọc Token-Aware (Siêu Tính Năng). Nếu bài báo có nhắc đến tên Token/Sàn ở đây, *CỘNG THÊM* từ khóa Market Moving -> *Cộng ngay 2.0đ Thưởng*. Ngược lại, Tên Token *CỘNG THÊM* bài viết sặc mùi Đầu cơ phân tích chiều giá -> *Trừ ngay 10.0đ Phạt* (giết rank ngay lập tức).
 - **`editorial_verbs`**: Các động từ mạnh mẽ báo hiệu tin nóng nổ ra. Nếu báo đưa tựa đề có chữ `"hacked"`, cộng 4.5 điểm!
 
 ### 2. Định Hình Nét Chữ AI (Mục `PROMPT_TEMPLATES`)

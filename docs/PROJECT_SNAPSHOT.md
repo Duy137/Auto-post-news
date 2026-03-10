@@ -11,7 +11,10 @@ The system leverages LLMs (Gemini/OpenAI) to rewrite content into concise, engag
 ### RSS Lane (Standard)
 - **Collect:** Ingests raw RSS feeds normalized into standard `Article` objects.
 - **Deduplicate:** Hard and Soft deduplication via SQLite mapping, entirely eliminating legacy JSON history.
-- **Rank:** Deterministic Anti-Price Speculation Engine. Utilizes tier-based Regex patterns, strict Keyword Score Caps, and soft penalties mapped exclusively to macro and tech events (Zero-LLM Topic Classification).
+- **Rank:** Token-Aware Deterministic Ranking Engine. 
+  - Utilizes tier-based Keyword Score Caps (e.g., `market_moving` events cap at 15.0).
+  - Explicit **Token-Aware Logic**: Awards massive boosts (+2.0) to major Token/Exchange entities involved in market-moving events (hacks, funding, listings), while applying fatal penalties (-10.0) to price prediction and analyst commentary.
+  - Applies Time Decay and Momentum multipliers.
 - **Select:** Sorts and selects the top candidates.
 - **Summarize:** Routes to LLM to generate platform-compliant content. Uses an **Ultimate Regex Fallback Parser** to guarantee robust extraction (Headline, Summary, Impact, Hashtags) regardless of AI hallucination or custom separators.
 - **Publish:** Pushes generated content to configured platforms (e.g., Twitter, Telegram, Facebook) with lane-specific formatting rules (e.g., preserving hyperlinks only for RSS, omitting HASHTAGS on Telegram to keep the channel clean).
@@ -45,4 +48,5 @@ The system leverages LLMs (Gemini/OpenAI) to rewrite content into concise, engag
 
 ## 6. Current Operational Status
 - **Phase 10 Completed:** The Dual-Lane V2.1 Architecture is structurally sealed, feature-complete, rigorously decoupled, and 100% JSON-independent.
+- **Phase 11 (Market-Moving Scoring) Completed:** Integrated Token-Aware modifiers to correctly identify and prioritize high-value market drivers over speculative analysis.
 - **Future Ready:** Capable of scaling entirely new Lanes or Platforms by solely injecting them into the `PLATFORM_MAPPING` and `PROMPT_TEMPLATES` config engine without tearing down core executors.
