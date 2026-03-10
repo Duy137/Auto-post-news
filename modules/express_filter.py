@@ -81,6 +81,10 @@ MACRO_GEOPOLITICS_WEIGHTS: Dict[str, float] = {
     r'\bbơm tiền\b': 20.0,
     r'\bin tiền\b': 20.0,
     r'\bprint(ing)? money\b': 20.0,
+    r'\bthâm hụt\b': 20.0,
+    r'\btăng trưởng\b': 20.0,
+    r'\bgiảm phát\b': 20.0,
+    r'\bnợ công\b': 20.0,
     
     # Chính sách
     r'\bcấm\b': 20.0,
@@ -107,8 +111,17 @@ MACRO_GEOPOLITICS_WEIGHTS: Dict[str, float] = {
     r'\btension(s)?\b': 20.0,
     r'\bquân đội\b': 20.0,
     r'\bmilitary\b': 20.0,
-    r'\đối thoại\b': 20.0,
-    r'\tuyên bố\b': 20.0,
+    r'\bđối thoại\b': 20.0,
+    r'\btuyên bố\b': 20.0,
+    r'\bdầu\b': 20.0,
+    r'\boil\b': 20.0,
+    r'\battack\b': 20.0,
+    r'\bxăng\b': 20.0,
+    r'\bthương mại\b': 20.0,
+    r'\btrade\b': 20.0,
+    r'\btrừng phạt\b': 20.0,
+    r'\bsanction\b': 20.0,
+    r'\btrump\b': 20.0,
 }
 
 # CÁC QUỐC GIA, TỔ CHỨC VÀ ĐỊNH CHẾ TÀI CHÍNH (Tăng lên 10.0 theo ý Sếp)
