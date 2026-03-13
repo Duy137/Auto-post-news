@@ -38,7 +38,7 @@ warnings.filterwarnings("ignore")
 # Quy định luồng nào (RSS, EXPRESS) được đăng lên nền tảng nào.
 PLATFORM_MAPPING = {
     "EXPRESS": ["telegram"],
-    "RSS": ["telegram"]  # Có thể thêm "facebook" nếu bật
+    "RSS": ["telegram", "twitter"]  # Thêm twitter để test Dry Run
 }
 
 # --- CẤU HÌNH DUAL-LANE ORCHESTRATION ---
@@ -334,11 +334,14 @@ PROMPT_TEMPLATES = {
         "- HEADLINE must be SHORT and in FULL UPPERCASE.\n"
         "- Write 3–5 bullet points.\n"
         "- Each bullet point explains ONE key piece of information.\n"
-        "- Each bullet should be 1–2 sentences.\n"
+        "- Each bullet should be 1–3 sentences.\n"
         "- Use the bullet symbol '🔷'.\n"
-        "- Do NOT include hashtags.\n"
-        "- Do NOT include 'IMPACT'.\n"
         "- Do NOT add commentary or speculation.\n"
+        "\n"
+        "Hashtag rules:\n"
+        "- Add 2–3 hashtags at the end of the post.\n"
+        "- Hashtags must be in English.\n"
+        "- Use short ecosystem or topic tags (example: #Bitcoin #Ethereum #CryptoRegulation #DeFi #OilMarket).\n"
         "\n"
         "Output format (strict):\n"
         "HEADLINE\n"
@@ -350,6 +353,7 @@ PROMPT_TEMPLATES = {
         "🔷 <bullet point 3>\n"
         "\n"
         "🔷 <bullet point 4 if needed>"
+        "|||HASHTAGS: <1-3 tags>"
     )
 }
 
@@ -378,7 +382,7 @@ TWITTER_CONFIG = {
     
     # Bật cờ này trong lúc dev/test để tránh gọi API thật lên Twitter
     #"dry_run": os.environ.get("PUBLISH_DRY_RUN", "True").lower() == "true",
-    "dry_run": False,
+    "dry_run": True,
     
     # Yêu cầu về độ dài
     "target_length": 600,
