@@ -78,12 +78,11 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
     elif platform == "telegram":
         if lane == "EXPRESS":
             return f"🚨 <b>{safe_headline}</b>\n\n{safe_summary}{safe_impact_text}"
-        # RSS Default - Dùng nháy kép cho href và thêm Naked Link ở cuối để Crawler bắt tốt hơn
+        # RSS Default - Dùng nháy kép cho href để Crawler bắt tốt hơn
         return (
             f"📝 <b>{safe_headline}</b>\n\n"
             f"{safe_summary}{safe_impact_text}\n\n"
-            f"🔗 <a href=\"{link}\">Đọc bài gốc</a>\n"
-            f"<!-- {link} -->" # Naked link ẩn hoặc lộ tùy ý, ở đây tôi để ẩn nhưng crawler vẫn thấy
+            f"🔗 <a href=\"{link}\">Đọc bài gốc</a>"
         )
     elif platform == "facebook":
         if lane == "EXPRESS":
@@ -150,6 +149,7 @@ def publish_to_telegram(article: Article, is_dry_run: bool, lane: str = "RSS") -
         "text": content, 
         "parse_mode": "HTML",
         "link_preview_options": {
+            "url": link,
             "is_disabled": False,
             "prefer_large_media": True,
             "show_above_text": False
