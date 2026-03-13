@@ -4,6 +4,7 @@ import time
 import random
 import logging
 import requests
+import html
 from typing import List, Dict, Any, Optional
 
 import sys
@@ -64,6 +65,11 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
             return f"🚨 {fallback}"
         return f"📝 {fallback}\n\n🔗 {link}"
         
+    # Thoát các ký tự đặc biệt để đảm bảo HTML không lỗi
+    safe_headline = html.escape(headline)
+    safe_summary = html.escape(summary)
+    safe_impact_text = html.escape(impact_text)
+
     if platform == "twitter":
         content = f"{headline}\n\n{summary}{impact_text}"
         if hashtags:
@@ -71,9 +77,14 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
         return truncate_tweet_safely(content, TWITTER_CONFIG["target_length"], TWITTER_CONFIG["hard_max_length"])
     elif platform == "telegram":
         if lane == "EXPRESS":
-            return f"🚨 <b>{headline}</b>\n\n{summary}{impact_text}"
-        # RSS Default
-        return f"📝 <b>{headline}</b>\n\n{summary}{impact_text}\n\n🔗 <a href='{link}'>Đọc bài gốc</a>"
+            return f"🚨 <b>{safe_headline}</b>\n\n{safe_summary}{safe_impact_text}"
+        # RSS Default - Dùng nháy kép cho href và thêm Naked Link ở cuối để Crawler bắt tốt hơn
+        return (
+            f"📝 <b>{safe_headline}</b>\n\n"
+            f"{safe_summary}{safe_impact_text}\n\n"
+            f"🔗 <a href=\"{link}\">Đọc bài gốc</a>\n"
+            f"<!-- {link} -->" # Naked link ẩn hoặc lộ tùy ý, ở đây tôi để ẩn nhưng crawler vẫn thấy
+        )
     elif platform == "facebook":
         if lane == "EXPRESS":
             return f"🚨 {headline}\n\n{summary}{impact_text}"
@@ -134,7 +145,16 @@ def publish_to_telegram(article: Article, is_dry_run: bool, lane: str = "RSS") -
         return {"success": False, "post_id": None, "error": f"Missing Telegram API config for lane {lane}"}
         
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": content, "parse_mode": "HTML"}
+    payload = {
+        "chat_id": chat_id, 
+        "text": content, 
+        "parse_mode": "HTML",
+        "link_preview_options": {
+            "is_disabled": False,
+            "prefer_large_media": True,
+            "show_above_text": False
+        }
+    }
     
     try:
         response = requests.post(url, json=payload, timeout=10)
