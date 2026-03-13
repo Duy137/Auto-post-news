@@ -38,7 +38,7 @@ warnings.filterwarnings("ignore")
 # Quy định luồng nào (RSS, EXPRESS) được đăng lên nền tảng nào.
 PLATFORM_MAPPING = {
     "EXPRESS": ["telegram"],
-    "RSS": ["telegram", "twitter"]  # Thêm twitter để test Dry Run
+    "RSS": ["telegram"]  # Thêm twitter để test Dry Run
 }
 
 # --- CẤU HÌNH DUAL-LANE ORCHESTRATION ---
@@ -382,7 +382,7 @@ TWITTER_CONFIG = {
     
     # Bật cờ này trong lúc dev/test để tránh gọi API thật lên Twitter
     #"dry_run": os.environ.get("PUBLISH_DRY_RUN", "True").lower() == "true",
-    "dry_run": True,
+    "dry_run": False,
     
     # Yêu cầu về độ dài
     "target_length": 600,
