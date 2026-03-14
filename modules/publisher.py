@@ -143,6 +143,7 @@ def publish_to_telegram(article: Article, is_dry_run: bool, lane: str = "RSS") -
     if not bot_token or not chat_id:
         return {"success": False, "post_id": None, "error": f"Missing Telegram API config for lane {lane}"}
         
+    link = article.get("link", "")
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id, 
