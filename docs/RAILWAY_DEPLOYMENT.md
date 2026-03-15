@@ -53,7 +53,19 @@ Bởi vì file `.env` không được đẩy lên GitHub (để bảo mật), b�
 3. Copy toàn bộ nội dung trong file `.env` ở máy tính của bạn, dán thả vào ô Raw Editor này. (Đặc biệt đảm bảo đã dán cả dòng `TG_STRING_SESSION` siêu dài kia vào).
 4. Bấm `Update Variables`.
 
-Railway sẽ tự động Re-Deploy (khởi động lại) Bot. 
-Bây giờ hãy chuyển sang tab **Deployments**, bấm nút **View Logs** để xem Bot thức giấc và hoạt động y như trên máy tính của bạn!
+Đây là một dự án "Set and Forget" nhưng thỉnh thoảng bạn nên kiểm tra Logs để đảm bảo mọi thứ trơn tru.
+
+### Cách đọc Log Chuyên Nghiệp trên Railway:
+1. Nhấp vào dịch vụ của bạn -> Tab **Deployments** -> **View Logs**.
+2. **Theo dõi Telegram Send (MỚI):** Tìm các dòng có chữ `TELEGRAM_SEND`. Đây là bằng chứng thép bài đã được đẩy đi.
+3. **Phân biệt Trùng Lặp (Idempotency):**
+   - ✅ `POSTED`: Bài mới được đăng thành công.
+   - ⏭️ `SKIPPED (Duplicate)`: Bot nhận diện bài này đã đăng rồi hoặc trùng lặp, nó sẽ bỏ qua để không làm phiền người dùng.
+4. **Debug Ranking bài viết:** Tìm các dòng mang nhãn `📊 [RANK DEBUG]` để xem chi tiết tại sao bài đó được điểm cao hoặc bị trừ điểm nặng.
+
+---
+
+## BƯỚC 4: BẢO TRÌ VÀ CẬP NHẬT
+Mỗi khi bạn có code mới (Sửa từ khóa, đổi Prompt AI), chỉ cần **Push** lên GitHub. Railway sẽ thấy sự thay đổi và tự động Deploy bản mới nhất trong 60 giây. Không cần bấm nút gì cả!
 
 🎉 Tận hưởng cảm giác nhàn nhã nhìn Bot tự làm việc 24/7!

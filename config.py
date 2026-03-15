@@ -160,6 +160,7 @@ class KeywordCapConfig(TypedDict):
     macro_politics: float
     major_tech: float
     price_analysis: float
+    priority_event: float
 
 class ScoringWeights(TypedDict):
     base_score: float
@@ -182,11 +183,19 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Từ khóa chia làm các rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {
-        "market_moving": ["hack", "exploit", "breach", "attack", "security incident", "vulnerability", "fraud", "scam", "rug pull", "theft", "embezzle", "investigation", "probe", "lawsuit", "charges", "indictment", "court", "fine", "settlement", "sanction", "ban", "regulation", "regulatory", "withdrawal halt", "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "funding", "investment", "raises", "raise", "venture funding", "series a", "series b", "series c", "acquire", "acquisition", "merger", "buyout", "token unlock", "unlock", "token burn", "burn", "supply reduction", "inflation change", "listing", "listed", "delist", "delisting", "etf", "etf approval", "approval", "partnership", "collaboration", "integration", "launch", "mainnet launch", "testnet launch", "hard fork", "soft fork", "upgrade", "protocol upgrade", "airdrop", "staking launch", "staking unlock", "buyback", "treasury purchase"],
+        "market_moving": ["hack", "exploit", "breach", "attack", "security incident", "vulnerability", "fraud", "scam", "rug pull", "theft", "embezzle", "investigation", "probe", "lawsuit", "charges", "indictment", "court", "fine", "settlement", "sanction", "ban", "regulation", "regulatory", "withdrawal halt", "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "funding", "investment", "raises", "raise", "venture funding", "series a", "series b", "series c", "acquire", "acquisition", "merger", "buyout", "token unlock", "unlock", "token burn", "burn", "supply reduction", "inflation change", "listing", "listed", "delist", "delisting", "etf", "etf approval", "partnership", "collaboration", "integration", "launch", "mainnet launch", "testnet launch", "hard fork", "soft fork", "upgrade", "protocol upgrade", "airdrop", "staking launch", "staking unlock", "buyback", "treasury purchase"],
         "urgent": ["sues", "arrest"],
         "macro_politics": ["bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "cpi", "rate"],
         "major_tech": ["mainnet", "protocol", "network", "roadmap"],
-        "price_analysis": ["price prediction", "price forecast", "price outlook", "analyst predicts", "analysts say", "analysts expect", "bullish", "bearish", "price target", "could reach", "could hit", "expected to", "set to reach", "market outlook", "technical analysis", "chart analysis", "trend analysis", "resistance level", "support level", "price projection", "predict", "forecast", "analysis", "analyst"]
+        "price_analysis": [
+            "surge", "surges", "rally", "rallies", "climb", "climbs", "jump", "jumps", "soar", "soars", "drop", "drops", "slide", "slides", "plunge", "plunges",
+            "analyst says", "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern"
+        ],
+        "priority_event": [
+            "investigation", "lawsuit", "enforcement", "subpoena",
+            "hack", "exploit", "breach", "attack",
+            "halt withdrawals", "suspend trading", "freeze funds"
+        ]
     },
     
     # Điểm Trần (Cap) của từng rổ để tránh lạm phát
@@ -195,8 +204,17 @@ SCORING_WEIGHTS: ScoringWeights = {
         "urgent": 10.0,
         "macro_politics": 12.0,
         "major_tech": 10.0,
-        "price_analysis": -6.0  # Điểm âm (Soft Penalty)
+        "price_analysis": -18.0,
+        "priority_event": 10.0
     },
+    
+    # [NEW] Two-Layer Speculation Filter
+    "SPECULATION_HARD_REJECT_PATTERN": r"(price\s+prediction|price\s+target|forecast\s+price|market\s+outlook|will\s+reach|\bscore\b.*\bprediction\b|forecast.*\d+\$)",
+    "SPECULATION_SOFT_PENALTY_SCORE": -12.0,
+    
+    # [NEW] Advanced Capital Flow Detection
+    "CAPITAL_FLOW_REGEX": r"((\$|€|£)\d+(\.\d+)?(k|m|b)?)|(\d+(\.\d+)?(k|m|b)\s*(usd|usdt|eth|btc|tokens?))|(\d+(\.\d+)?\s*(million|billion))",
+    "CAPITAL_FLOW_BONUS": 4.0,
     
     # Token-Aware Scoring
     "major_tokens": ["BTC", "Bitcoin", "ETH", "Ethereum", "BNB", "SOL", "Solana", "XRP", "Ripple", "ADA", "Cardano", "DOGE", "Dogecoin", "TRX", "Tron", "DOT", "Polkadot", "LTC", "Litecoin", "SHIB", "UNI", "Uniswap", "AVAX", "Avalanche", "MATIC", "Polygon", "LINK", "Chainlink", "APT", "Aptos", "ARB", "Arbitrum", "OP", "Optimism", "SUI", "INJ", "Injective", "NEAR", "ATOM", "Cosmos", "FTM", "Fantom", "AAVE", "MKR", "OKB"],
@@ -211,16 +229,11 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Dấu hiệu Action Event (Trọn bộ Vĩ mô & Công nghệ)
     "editorial_verbs": {
-        "announce": 4.0,
-        "approve": 4.0,
-        "pass": 4.0,
-        "enforce": 4.0,
-        "file": 3.5,
-        "propose": 3.5,
-        "launch": 3.0,
-        "upgrade": 3.0,
-        "integrate": 3.0,
-        "adopt": 3.0
+        "sue": 5.0, "sues": 5.0, "accuse": 4.5, "investigate": 4.5, "liquidate": 4.5,
+        "freeze": 4.0, "halt": 4.0, "halted": 4.0, "deploy": 3.5,
+        "announce": 3.0, "approve": 4.0, "pass": 4.0, "enforce": 4.0,
+        "file": 3.5, "propose": 3.5, "launch": 3.0, "upgrade": 3.0,
+        "invest": 4.0, "buy": 3.5, "sell": 3.5, "raise": 4.0
     },
     
     # Cộng thêm nếu bài nằm trong rổ chủ đề đang rầm rộ

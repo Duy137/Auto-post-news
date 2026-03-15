@@ -1,60 +1,60 @@
-# Hệ Thống Chấm Điểm Ranking Engine (V3.0 - Token-Aware)
+# Hệ Thống Chấm Điểm Ranking Engine (V4.0 - Tiered & Context-Aware)
 
 Chào Kiến trúc sư và Người vận hành,
 
-Tài liệu này giải thích chi tiết toàn bộ cơ chế hoạt động của `modules/rank.py` và cách chúng ta "dạy" hệ thống nhận diện tin tức thông qua `config.py`. Hệ thống được thiết kế hoàn toàn theo logic **Chấm điểm tất định (Deterministic Scoring)**, không sử dụng LLM ở bước phân loại để tiết kiệm chi phí và đảm bảo tốc độ tuyệt đối.
-
-Mục tiêu tối thượng của Ranking Engine: **Đưa tin tức thực sự tác động đến thị trường (Market-Moving Events) lên Top 1, đồng thời tiêu diệt toàn bộ các bài viết sặc mùi nhận định, dự đoán giá (Price Speculation & Analysis).**
+Tài liệu này giải thích chi tiết toàn bộ cơ chế hoạt động của `modules/rank.py`. Phiên bản 4.0 giới thiệu khả năng **Phân tầng ưu tiên (Tiered Priority)** và **Bộ lọc ngữ cảnh (Contextual Filter)** để giải quyết triệt để bài toán: *Làm sao để ưu tiên tin cực nóng nhưng không bị phạt oan khi bài tin đó có chứa từ khóa liên quan đến biến động giá.*
 
 ---
 
 ## 🏗️ 1. Cấu Trúc Tổng Thể (The Formula)
 
-Điểm số cuối cùng của mỗi bài báo (Final Score) được tính qua công thức:
+Điểm số bài báo (Final Score) được tính dựa trên lõi Biên Tập nhân với các hệ số Viral và Decay:
 `Total Score = (Base + Editorial_Score) * Viral_Potential * Time_Decay * Source_Credibility`
 
-Trong đó:
-*   `Base`: Điểm sàn mặc định (Luôn = 3.0)
-*   `Editorial_Score`: Điểm biên tập (Trọng tâm của tính năng Token-Aware mới).
-*   `Viral_Potential`: Tiềm năng lan truyền (Chứa Momentum & Cú shock từ vựng).
-*   `Time_Decay`: Độ thối rữa theo thời gian (Tin càng cũ càng mất điểm).
+---
+
+## 🎯 2. Logic Phân Tầng & Chấm Điểm (Tiered Scoring)
+
+### Tier 1: Sự kiện Ưu Tiên Tuyệt Đối (Priority Events)
+Hệ thống định nghĩa rổ `priority_event` trong `config.py` dành cho các tin "bom tấn":
+*   **Hành động pháp lý:** SEC Investigation, Lawsuit, Subpoena.
+*   **Sự cố bảo mật:** Hack, Exploit, Breach.
+*   **Vận hành sàn:** Halt withdrawals, Suspend trading.
+=> Các bài này được cộng điểm cực lớn và **luôn có log Debug** để theo dõi.
+
+### Tier 2: Dòng Tiền Lớn (Advanced Capital Flow)
+Sử dụng Regex thông minh để phát hiện các con số triệu/tỷ USD hoặc ETH/BTC lớn (Ví dụ: "$50M", "10,000 ETH").
+*   **Thưởng nóng (+4.0đ):** Cho bất kỳ bài nào chứa bằng chứng về dòng tiền lớn.
+
+### Tier 3: Token-Aware Logic
+*   **Thương hiệu lớn (+2.0):** Thưởng nếu bài liên quan đến Top Tokens/Exchanges có kèm sự kiện thực tế.
+*   **Thầy dùi (-10.0/-12.0):** Phạt nặng nếu nhắc đến Token nhưng nội dung chỉ là phân tích giá.
 
 ---
 
-## 🎯 2. Lõi Chấm Điểm Biên Tập (Editorial Score & Token-Aware Logic)
+## 🛡️ 3. Bộ Lọc Speculation Hai Lớp (Two-Layer Filter)
 
-Đây là nơi hệ thống quyết định bài báo có "chất" hay không. Tín hiệu được lấy từ cấu hình `SCORING_WEIGHTS` trong `config.py`.
+Để tiêu diệt tin rác đầu cơ nhưng không giết nhầm tin tốt, hệ thống dùng 2 lớp:
 
-### A. Rổ Từ Khóa (Keyword Categories & Caps)
-Chúng ta chia từ khóa thành nhiều "Rổ" (Categories). Mỗi từ khóa khi xuất hiện sẽ được cộng điểm, NHƯNG tổng điểm của một rổ không bao giờ được vượt quá "Điểm Trần" (Cap) để chống lạm phát điểm nếu một bài viết nhồi nhét quá nhiều từ khóa.
-
-*   **Rổ `market_moving` (Cap: 15.0)**: Chứa các sự kiện thay đổi cuộc chơi như Hacks, Funding lớn, Listing, Kiện tụng SEC,... Được ưu tiên điểm cao nhất.
-*   **Rổ `macro_politics` (Cap: 12.0)**: Chứa luật lệ, vĩ mô, lãi suất.
-*   **Rổ `major_tech` (Cap: 10.0)**: Chứa công nghệ lõi như Mainnet, Hardfork.
-*   **Rổ `price_analysis` (Cap: -6.0)**: KHU VỰC CẤM! Chứa các từ "analyst predicts", "price target". Khi quét trúng, điểm số ngay lập tức **bị trừ**.
-
-### B. Động Từ Biên Tập (Editorial Verbs)
-Xếp hạng các động từ hành động mạnh (như "approve", "enforce", "announce") vào đầu tựa bài sẽ được cộng dồn (Max 4.0đ). Càng hành động, điểm càng cao.
-
-### 🌟 C. Cơ Chế Thưởng/Phạt thông minh: Token-Aware
-Hệ thống không đánh đồng mọi bài báo có nhắc đến Bitcoin. Nó quan tâm đến **bối cảnh**. Trong `config.py` định nghĩa 2 danh sách khổng lồ: `MAJOR_TOKENS` (Top 45+) và `MAJOR_EXCHANGES` (Top 14+).
-
-Hàm tính điểm sẽ soi: Bài báo có nhắc đến Tên Token/Sàn hay không?
-*   **Cộng cồng kềnh (+2.0)**: Nếu bài có Tên Token + Rơi vào rổ `market_moving` (Ví dụ: "OKX nhận đầu tư 100 Triệu USD").
-*   **Trảm lập quyết (-10.0)**: Nếu bài có Tên Token + Rơi vào rổ `price_analysis` (Ví dụ: "Solana chuẩn bị bật tăng lên 500$, theo lời chuyên gia"). Mức phạt -10.0đ này sẽ dìm bài báo xuống đáy bảng xếp hạng vĩnh viễn, ngăn không cho gửi cặn bã tới LLM tóm tắt.
-
-*(Ngoài ra hệ thống còn chặn cứng ở vòng ngoài bằng `SPECULATION_REJECT_PATTERN` đối với cụm từ quá rõ ràng, đánh điểm `-999.0` để Vứt Bài Ngay Lập Tức mà không cần tốn CPU tính toán).*
+1.  **Lớp 1: Chặn Cứng (Hard Reject):**
+    Quét qua `SPECULATION_HARD_REJECT_PATTERN`. Nếu tiêu đề chứa cụm từ như "Price Prediction", "Price Target", "Forecast $...", hệ thống **vứt bài ngay lập tức** (điểm -999.0).
+2.  **Lớp 2: Phạt Mềm & Bộ lọc Ngữ Cảnh (Contextual Filter):**
+    Bình thường, các từ như "Surge", "Rally", "Plunge" sẽ bị phạt nặng (**-18.0đ**).
+    **TUY NHIÊN:** Nếu bài báo đó **VỪA** có từ biến động giá, **VỪA** có từ khóa thuộc nhóm `priority_event` (Ví dụ: "Bitcoin surges after ETF Approval"), hệ thống sẽ tự động **giảm 70% mức phạt**. Điều này giúp các tin tức quan trọng có biến động giá đi kèm vẫn được đăng.
 
 ---
 
-## 🌪️ 3. Hệ Số Lan Truyền (Viral Potential)
+## 🌪️ 4. Sức Mạnh Lan Truyền (Viral Potential)
+... (Giữ nguyên cơ chế Momentum và Shock Score) ...
 
-Sau khi tính được "Chất lượng" bài viết ở mục 2, hệ thống nhân nó với sức lây lan:
+---
 
-*   **Sức Nóng Dư Luận (Cross-Source Momentum):** Nếu cùng một sự kiện (ví dụ: SEC kiện Binance) mà cả CoinTelegraph lẫn CoinDesk đều đồng loạt đăng trong vài giờ qua -> Thuật toán Jaccard sẽ so sánh chéo, nhận diện đây là tin cực chấn động và nhân vọt hệ số lan truyền cho CẢ HAI bài viết.
-*   **Từ vựng Gây Sốc (Shock Score):** Bơm một chút hệ số nếu tựa đề chứa những từ ngắn gắt gỏng ("Halt", "FBI", "Raid", "Emergency").
+## ⏳ 5. Quan sát & Tinh chỉnh (Observability)
 
-Tất cả độ lây lan này bị nhốt trong hàm Sigmoid để hệ số không bao giờ bùng nổ vượt quá mức cho phép (Khóa khung nhân tử từ `0.7x` đến `1.8x`).
+Phiên bản này bổ sung log `📊 [RANK DEBUG]` chi tiết từng thành phần:
+- Xem cụ thể điểm thưởng Keyword, điểm thưởng Dòng tiền, và điểm phạt bị giảm nhờ Context Filter.
+- **Quy tắc vàng:** Nếu tin rác vẫn lọt, chỉ cần thêm từ khóa vào rổ `price_analysis` hoặc cập nhật Regex `SPECULATION_HARD_REJECT_PATTERN` trong `config.py`.
+�� không bao giờ bùng nổ vượt quá mức cho phép (Khóa khung nhân tử từ `0.7x` đến `1.8x`).
 
 ---
 

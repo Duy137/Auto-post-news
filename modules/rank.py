@@ -45,14 +45,15 @@ def get_adaptive_keyword_weight(keyword: str, base_weight: float, kw_freqs: Dict
     penalty = 1.0 / math.log10(freq + 10)
     return base_weight * penalty
 
-def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, int]) -> Tuple[float, float, List[str], float]:
-    """Tính Keyword Score adaptive bằng Regex Boundary. Trả về (Positive_Score, Penalty_Score, List_Words, Token_Modifier)."""
+def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, int]) -> Tuple[float, float, List[str], float, bool]:
+    """Tính Keyword Score adaptive bằng Regex Boundary. Trả về (Positive_Score, Penalty_Score, List_Words, Token_Modifier, Has_Priority_Event)."""
     text = f"{title} {summary}".lower()
     
     positive_score = 0.0
     penalty_score = 0.0
     found_keywords = []
     has_market_moving = False
+    has_priority_event = False
     has_price_analysis = False
     
     # 1. Quét các rổ từ khóa tiêu chuẩn
@@ -72,6 +73,8 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
                 
                 if cat == "market_moving":
                     has_market_moving = True
+                elif cat == "priority_event":
+                    has_priority_event = True
                 elif cat == "price_analysis":
                     has_price_analysis = True
         
@@ -79,7 +82,11 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
         if base_w > 0:
             positive_score += min(cat_score, base_w)
         else:
-            penalty_score += max(cat_score, base_w) # base_w là số âm (vd: -6.0)
+            current_penalty = max(cat_score, base_w)
+            # Contextual Filter: If Price Analysis matches BUT Priority Event/Market Moving exists -> Reduce Penalty by 70%
+            if cat == "price_analysis" and (has_market_moving or has_priority_event):
+                current_penalty *= 0.3
+            penalty_score += current_penalty
 
     # 2. Quét Compound Tech Regexes (Công nghệ Tài sản lõi)
     compound_weight = SCORING_WEIGHTS.get("compound_tech_weight", 5.0)
@@ -93,14 +100,14 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
     token_modifier = 0.0
     combined_entities = SCORING_WEIGHTS.get("major_tokens", []) + SCORING_WEIGHTS.get("major_exchanges", [])
     if detect_entities(f"{title} {summary}", combined_entities):
-        if has_price_analysis:
-            token_modifier = -10.0
+        if has_price_analysis and not (has_market_moving or has_priority_event):
+            token_modifier = SCORING_WEIGHTS.get("SPECULATION_SOFT_PENALTY_SCORE", -10.0)
             penalty_score += token_modifier  # Phạt cực nặng bài thầy dùi
-        elif has_market_moving:
+        elif has_market_moving or has_priority_event:
             token_modifier = 2.0
             positive_score += token_modifier # Thưởng nhẹ để đôn rank bài tin tức thực sự
 
-    return positive_score, penalty_score, found_keywords, token_modifier
+    return positive_score, penalty_score, found_keywords, token_modifier, has_priority_event
 
 def calc_editorial_verb_score(title: str) -> float:
     """Lấy điểm trọng số cộng dồn của các động từ hành động Vĩ mô."""
@@ -199,9 +206,6 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
     kw_freqs = get_keyword_frequencies_24h()
     keywords_to_log = []
     
-    # [NEW] Regex Pattern để diệt gọn bài phân tích giá / rác đầu cơ
-    SPECULATION_REJECT_PATTERN = r"(price\s+target|price\s+prediction|technical\s+analysis|bullish|bearish|support\s+level|resistance\s+level|analyst\s+predicts?|forecast\s+price)"
-    
     # 1. Tính toán Cross-Source Momentum (Global view của mảng đợt này)
     momentum_map = detect_cross_source_momentum(articles)
     base_score = SCORING_WEIGHTS["base_score"]
@@ -213,20 +217,27 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
     for art in articles:
         text_lower = (art["title"] + " " + art.get("summary", "")).lower()
         
-        # [NEW] HARD REJECT: Kiểm tra mẫu Câu Đầu Cơ Giá
-        speculation_match = re.search(SPECULATION_REJECT_PATTERN, text_lower)
+        # [MODIFIED] Two-Layer Speculation Filter: Hard Reject
+        spec_hard_pattern = SCORING_WEIGHTS.get("SPECULATION_HARD_REJECT_PATTERN", r"price\s+prediction")
+        speculation_match = re.search(spec_hard_pattern, text_lower)
         if speculation_match:
-            logger.warning(f"🛑 [FILTERED] Article '{art['id']}': Hard dropped due to Speculation Pattern Detected: '{speculation_match.group(1)}'")
+            logger.warning(f"🛑 [FILTERED] Article '{art['id']}': Hard dropped due to Speculation Pattern Detected: '{speculation_match.group(0)}'")
             art["score"] = -999.0
             art["score_detail"] = {"error": "Speculation Hard Reject"}
-            continue # Vứt bài này ngay lập tức, không tốn CPU tính điểm nữa
+            continue 
             
         # A. Base Impacts
-        positive_kw_score, penalty_kw_score, words_found, token_modifier = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
-        kw_score = positive_kw_score + penalty_kw_score # kw_score nay chứa cả thưởng và phạt (đã cap) + token_modifier
+        positive_kw_score, penalty_kw_score, words_found, token_modifier, has_priority_event = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
         keywords_to_log.extend(words_found)
         
         verb_score = calc_editorial_verb_score(art["title"])
+
+        # [NEW] Capital Flow Bonus (Tier 2)
+        capital_flow_bonus = 0.0
+        cf_pattern = SCORING_WEIGHTS.get("CAPITAL_FLOW_REGEX")
+        if cf_pattern and re.search(cf_pattern, text_lower):
+            capital_flow_bonus = SCORING_WEIGHTS.get("CAPITAL_FLOW_BONUS", 4.0)
+            positive_kw_score += capital_flow_bonus
         
         # B. Tín hiệu lan truyền
         shock_score = calc_shock_score(art["title"], art.get("summary", ""), kw_freqs)
@@ -238,7 +249,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # Thể loại để lấy Topic Fatigue
         entity_type = "default"
         text_lower = (art["title"]+art.get("summary", "")).lower()
-        if shock_score > 0: entity_type = "hack"
+        if shock_score > 0 or has_priority_event: entity_type = "hack"
         elif "etf" in text_lower: entity_type = "etf"
         elif "sec" in text_lower: entity_type = "sec"
         
@@ -256,7 +267,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         viral_potential = calc_bounded_viral_potential(raw_viral)
 
         # E. Editorial Score
-        editorial_score = (base_score + kw_score + verb_score) * src_cred
+        editorial_score = (base_score + positive_kw_score + penalty_kw_score + verb_score) * src_cred
 
         # F. Decay
         decay_mult = calc_directional_time_decay(art.get("root_created_ts", art.get("published_ts", current_ts)), current_ts, momentum_delta)
@@ -264,16 +275,14 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # G. FINAL SCORE formula (V3.0 Deterministic)
         total_score = editorial_score * viral_potential * decay_mult
         
-        # [NEW] Tích hợp chi tiết breakdown_log để in ra Console cho dễ debug
+        # [NEW] Enhanced breakdown_log for Rank Debugging
         breakdown_log = (
-            f"\n📊 [RANKING] Article '{art['title'][:40]}...':\n"
-            f"  - MACRO/TECH/MARKET (+): {positive_kw_score:.2f} (Keywords: {words_found})\n"
-            f"      * Token Modifier: {token_modifier:+.2f} (Included in above +/i depending on penalty)\n"
-            f"  - EDITORIAL_SCORE   (+): {verb_score:.2f}\n"
-            f"  - PENALTY           (-): {penalty_kw_score:.2f}\n"
-            f"  - VIRAL/SHOCK_MULT  (x): {viral_potential:.2f} (Shock:{shock_score:.1f}, Momentum:{momentum_score:.1f})\n"
-            f"  - DECAY_MULT        (x): {decay_mult:.2f}\n"
-            f"  - SOURCE_CRED       (x): {src_cred:.2f}\n"
+            f"\n📊 [RANK DEBUG] Article: '{art['title'][:60]}...'\n"
+            f"  [+] Base: {base_score:.1f} | Editorial Verbs: {verb_score:.1f} | Source Cred: {src_cred:.1f}\n"
+            f"  [+] Kw Bonus: {positive_kw_score - capital_flow_bonus:.2f} | Capital Flow: {capital_flow_bonus:+.1f} | Token Mod: {token_modifier:+.1f}\n"
+            f"  [-] Penalty: {penalty_kw_score:.2f} | Fatigue: {fatigue_penalty:.1f}\n"
+            f"  [*] Mults: Viral={viral_potential:.2f} | TimeDecay={decay_mult:.2f}\n"
+            f"  [*] Keywords Found: {list(set(words_found))}\n"
         )
         
         # Phase 7: RSS Cooldown Suppression Guard
@@ -295,23 +304,19 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
             "base_score": base_score,
             "positive_keyword_score": round(positive_kw_score, 2),
             "penalty_keyword_score": round(penalty_kw_score, 2),
-            "token_modifier": round(token_modifier, 2),
+            "token_modifier": token_modifier,
+            "capital_flow_bonus": capital_flow_bonus,
             "editorial_verb_score": verb_score,
-            "cross_source_momentum_score": momentum_score,
-            "source_credibility": src_cred,
-            "source_latency_advantage": src_latency,
-            "shock_score": round(shock_score, 2),
             "viral_potential": round(viral_potential, 2),
             "editorial_score": round(editorial_score, 2),
             "topic_novelty_multiplier": topic_novelty_multiplier, 
-            "time_decay_multiplier": decay_mult,
             "total_score": round(total_score, 2)
         }
         art["score"] = art["score_detail"]["total_score"]
         
         # Bổ sung dòng Total Score vào Breakdown Log và in ra Console
         breakdown_log += f"  => FINAL_SCORE    : {art['score']:.2f}\n"
-        if art["score"] > 8.0: # Chỉ in log chi tiết các bài khá khẩm để tránh rác console
+        if art["score"] > 8.0 or has_priority_event: # Chỉ in log chi tiết các bài khá khẩm để tránh rác console
             logger.info(breakdown_log)
         
     # Lọc bỏ các bài bị Hard Reject (-999.0) khỏi danh sách để tránh lọt vào Selector
