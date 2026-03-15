@@ -1,4 +1,13 @@
 import asyncio
+import logging
+import requests
+import feedparser
+import time
+from typing import List, Optional
+from config import RSS_SOURCES, RssSource
+from models import Article, normalize_url, generate_article_id
+
+logger = logging.getLogger("COLLECTOR")
 
 # Global session to reuse TCP connections
 _rss_session = None
