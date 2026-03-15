@@ -128,10 +128,12 @@ async def collect_articles() -> List[Article]:
             logger.warning(f"No valid entries found (or fetch failed) for {source['name']}")
             continue
             
-        logger.info(f"Found {len(feed.entries)} entries for {source['name']}")
+        # Limit processing to newest 20 items
+        entries = feed.entries[:20]
+        logger.info(f"Processing top {len(entries)}/{len(feed.entries)} entries for {source['name']}")
         
         source_articles = []
-        for entry in feed.entries:
+        for entry in entries:
             article = standardize_entry(entry, source)
             if article:
                 source_articles.append(article)

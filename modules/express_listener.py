@@ -199,16 +199,22 @@ class ExpressListener:
             results = await loop_instance.run_in_executor(None, publish_all_platforms, [article_mock], "EXPRESS")
             
             # 6.3: Post-Publish Check
-            is_published = any(p.get("success") for p in results[0]["results"].values())
-            if is_published:
+            res_list = list(results[0]["results"].values())
+            is_new_success = any(p.get("success") for p in res_list)
+            is_already_posted = all(p.get("is_duplicate") for p in res_list) if res_list else False
+            
+            if is_new_success or is_already_posted:
                  self.last_publish_time = time.time() # Update Throttle Control
-                 logger.info(f"✅ [EXPRESS SUCCESS] Published! Inserting Fingerprint '{fingerprint_signature}' to lock 60m window.")
-                 await loop_instance.run_in_executor(None, insert_recent_topic, fingerprint_signature, 'EXPRESS')
-                 return # Thoát khỏi hàm hoàn toàn
+                 if is_new_success:
+                     logger.info(f"✅ [EXPRESS LANE] POSTED: Fingerprint '{fingerprint_signature}' successfully sent.")
+                     await loop_instance.run_in_executor(None, insert_recent_topic, fingerprint_signature, 'EXPRESS')
+                 else:
+                     logger.info(f"⏭️ [EXPRESS LANE] SKIPPED: Fingerprint '{fingerprint_signature}' already posted (Idempotency Guard).")
+                 return # Phase complete
             else:
                  logger.error(f"❌ [EXPRESS FAILED] Publish engines failed on attempt {attempt}.")
                  if attempt == max_retries:
-                     logger.error("🛑 [EXPRESS FATAL] Publish engines failed after all retries. Event dropped. Fingerprint NOT inserted.")
+                     logger.error("🛑 [EXPRESS FATAL] Publish engines failed after all retries. Event dropped.")
                      return
         
 

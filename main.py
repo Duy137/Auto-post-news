@@ -117,15 +117,27 @@ async def run_rss_pipeline_loop():
                             
                             for r in results:
                                 art_id = r["article_id"]
-                                it_success = any(p.get("success") for p in r.get("results", {}).values())
-                                if it_success:
+                                platform_list = list(r.get("results", {}).values())
+                                
+                                # 1. Was it actually posted in this cycle?
+                                new_success = any(p.get("success") for p in platform_list)
+                                
+                                # 2. Was it skipped because it's ALREADY posted everywhere?
+                                all_skipped = all(p.get("is_duplicate") for p in platform_list) if platform_list else False
+                                
+                                if new_success:
+                                    logger.info(f"✅ [RSS LANE] POSTED: Article {art_id} successfully sent to platforms.")
                                     metrics["posted_count"] += 1
                                     transition_state(art_id, ArticleState.POSTED)
                                     # Fingerprint dedup
                                     rss_title = next((a["title"] for a in tweet_ready_articles if a["id"] == art_id), "")
                                     fps = extract_fingerprints(rss_title)
                                     if fps: insert_recent_topic("||".join(fps), 'RSS')
+                                elif all_skipped:
+                                    logger.info(f"⏭️ [RSS LANE] SKIPPED: Article {art_id} already exists on platforms (Idempotency Guard).")
+                                    transition_state(art_id, ArticleState.POSTED) # Ensure state is terminal
                                 else:
+                                    # Partial failure or total failure
                                     metrics["failed_count"] += 1
                                     transition_state(art_id, ArticleState.FAILED)
 

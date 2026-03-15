@@ -31,8 +31,9 @@ class Article(TypedDict):
     tweet_content: Optional[str]  # Chứa nội dung raw fallback nếu có
     event_root_id: Optional[str]  # Định danh rễ sự kiện cho Topic Persistence
 
-class PlatformResult(TypedDict):
+class PlatformResult(TypedDict, total=False):
     success: bool
+    is_duplicate: bool
     post_id: Optional[str]
     error: Optional[str]
 

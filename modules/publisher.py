@@ -158,6 +158,7 @@ def publish_to_telegram(article: Article, is_dry_run: bool, lane: str = "RSS") -
     }
     
     try:
+        logger.info(f"🚀 TELEGRAM_SEND | chat_id={chat_id} | art_id={article['id']} | msg_len={len(content)}")
         response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
@@ -227,9 +228,17 @@ def publish_all_platforms(articles: List[Article], source_lane: str = "RSS") -> 
         at_least_one_new_success = False
 
         for platform_name in active_platforms:
+            # Debug log for idempotency key
+            logger.debug(f"[IDEMPOTENCY] Checking event_fp: '{event_fp}' for platform: {platform_name}")
+            
             if sm.is_event_published(event_fp, platform_name):
-                logger.info(f"Idempotency Guard: Event {event_fp} already posted on {platform_name}. Skipping.")
-                platform_results[platform_name] = {"success": True, "post_id": "already_posted", "error": "Duplicate"}
+                logger.info(f"Idempotency Guard: Event '{event_fp}' already posted on {platform_name}. Skipping.")
+                platform_results[platform_name] = {
+                    "success": False, 
+                    "is_duplicate": True, 
+                    "post_id": "already_posted", 
+                    "error": "Duplicate"
+                }
                 continue
                 
             publisher_func = PUBLISHERS.get(platform_name)
