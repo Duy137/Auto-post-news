@@ -1,60 +1,83 @@
-import time
-import logging
-from typing import List, Optional
-import feedparser
+import asyncio
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Global session to reuse TCP connections
+_rss_session = None
 
-from models import Article, generate_article_id, normalize_url
-from config import RSS_SOURCES, RssSource
+def get_rss_session():
+    """Lazily initialize the session with a custom User-Agent."""
+    global _rss_session
+    if _rss_session is None:
+        _rss_session = requests.Session()
+        _rss_session.headers.update({
+            "User-Agent": "CryptoNewsBot/1.0 (+RSS Aggregator)"
+        })
+    return _rss_session
 
-# Configure basic logging with different levels capability
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(levelname)s - [%(module)s] - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-def fetch_feed_with_retry(source: RssSource, max_retries: int = 2, delay_sec: int = 3) -> Optional[feedparser.FeedParserDict]:
-    """Fetch feed safety with simple retry logic."""
-    for attempt in range(max_retries + 1):
+async def fetch_feed_with_retry(source: RssSource, max_retries: int = 3) -> Optional[feedparser.FeedParserDict]:
+    """
+    Fetch RSS feed with production hardening:
+    - requests.Session for TCP reuse
+    - Split timeouts (3.05s connect, 10s read)
+    - Exponential backoff (1s, 2s, 5s) using asyncio.sleep
+    - HTTP Status validation (200 only)
+    """
+    session = get_rss_session()
+    backoff_steps = [1, 2, 5]
+    
+    for attempt in range(max_retries):
         try:
-            logger.info(f"Fetching RSS from: {source['name']} (Attempt {attempt+1}/{max_retries+1})")
-            feed = feedparser.parse(source["url"])
+            logger.info(f"Fetching RSS from: {source['name']} (Attempt {attempt+1}/{max_retries})")
             
-            # Check HTTP errs
-            if hasattr(feed, 'status') and feed.status not in (200, 301, 302, 304):
-                logger.error(f"HTTP Error {feed.status} when fetching {source['name']}")
+            # Using loop.run_in_executor for the synchronous requests.get call
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                None, 
+                lambda: session.get(source["url"], timeout=(3.05, 10))
+            )
+            
+            if response.status_code != 200:
+                logger.warning(f"NETWORK_ERROR: {source['name']} returned HTTP {response.status_code}")
+                if attempt < max_retries - 1:
+                    wait = backoff_steps[attempt]
+                    logger.info(f"Retrying in {wait}s...")
+                    await asyncio.sleep(wait)
+                    continue
                 return None
-                
+            
+            # Feedparser bridge (parsing is CPU bound, fine to do here or in executor)
+            feed = feedparser.parse(response.content)
+            
             # Check xml malformed
             if feed.bozo and isinstance(feed.bozo_exception, Exception):
-                logger.warning(f"Feed {source['name']} might be malformed: {feed.bozo_exception}")
-                # We still continue because feedparser is good at reading partial/malformed data
-                logger.info(f"Continuing to parse {source['name']} despite bozo flag.")
+                logger.warning(f"RSS_PARSE_WARNING: {source['name']} might be partially malformed: {feed.bozo_exception}")
                 
             return feed
+            
+        except requests.exceptions.Timeout:
+            logger.warning(f"NETWORK_ERROR: Connection timed out for {source['name']}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"NETWORK_ERROR: Request failed for {source['name']}: {str(e)}")
         except Exception as e:
-            logger.error(f"Unexpected error fetching {source['name']} on attempt {attempt+1}: {str(e)}")
-            if attempt < max_retries:
-                logger.info(f"Retrying in {delay_sec} seconds...")
-                time.time.sleep(delay_sec)
-            else:
-                logger.error(f"Failed to fetch {source['name']} after {max_retries + 1} attempts.")
+            logger.error(f"FATAL_ERROR: Unexpected error fetching {source['name']}: {str(e)}")
+            
+        if attempt < max_retries - 1:
+            wait = backoff_steps[attempt]
+            logger.info(f"Backing off {wait}s before retry...")
+            await asyncio.sleep(wait)
+            
+    logger.error(f"Failed to fetch {source['name']} after {max_retries} attempts.")
     return None
 
 def standardize_entry(entry: feedparser.FeedParserDict, source: RssSource) -> Optional[Article]:
     """Convert a raw RSS entry into our standard Article object."""
     try:
-        # Extract link
-        raw_link = entry.get('link', '')
+        # Extract link or GUID
+        raw_link = entry.get('link', entry.get('id', ''))
         if not raw_link:
-            logger.warning(f"Missing link in entry from {source['name']}. Skipping.")
+            logger.warning(f"Missing link/guid in entry from {source['name']}. Skipping.")
             return None
             
-        # Canonicalize the URL (remove utm_*, lowercase domain, etc)
+        # Canonicalize the URL
         canonical_link = normalize_url(raw_link)
         
         # deterministic ID using canonical link
@@ -65,12 +88,12 @@ def standardize_entry(entry: feedparser.FeedParserDict, source: RssSource) -> Op
         if hasattr(entry, 'published_parsed') and entry.published_parsed:
             published_ts = int(time.mktime(entry.published_parsed))
             
-        # Build standard object from dict
+        # Build standard object
         article: Article = {
             "id": article_id,
             "title": entry.get('title', 'Unknown Title'),
-            "link": canonical_link,    # Lưu link sạch
-            "raw_source_url": raw_link, # Lưu link thô để audit
+            "link": canonical_link,
+            "raw_source_url": raw_link,
             "summary": entry.get('summary', entry.get('description', '')),
             "published_ts": published_ts,
             "source_name": source['name'],
@@ -85,12 +108,12 @@ def standardize_entry(entry: feedparser.FeedParserDict, source: RssSource) -> Op
         logger.error(f"Fatal error processing entry from {source['name']}: {str(e)}")
         return None
 
-def collect_articles() -> List[Article]:
+async def collect_articles() -> List[Article]:
     """Main pipeline function for Phase 1: Collect."""
     all_articles: List[Article] = []
     
     for source in RSS_SOURCES:
-        feed = fetch_feed_with_retry(source)
+        feed = await fetch_feed_with_retry(source)
         
         if not feed or not hasattr(feed, 'entries'):
             logger.warning(f"No valid entries found (or fetch failed) for {source['name']}")

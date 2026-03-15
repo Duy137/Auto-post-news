@@ -86,12 +86,36 @@ def parse_structured_output(text: str) -> dict:
     cleaned_text = text.strip()
     
     # 1. TRÍCH XUẤT HASHTAGS (Luôn ưu tiên bóc từ dưới lên)
-    # Tìm nhãn HASHTAGS: hoặc nội dung có vẻ là hashtags ở cuối bài
-    hash_pattern = r"(?:\|\|\||\n+)?\s*HASHTAGS:\s*(.*)"
-    hash_match = re.search(hash_pattern, cleaned_text, re.IGNORECASE | re.DOTALL)
-    if hash_match:
-        res["hashtags"] = hash_match.group(1).strip()
-        cleaned_text = cleaned_text[:hash_match.start()].strip()
+    # Tìm nhãn HASHTAGS: ở cuối bài
+    label_hash_pattern = r"(?:\|\|\||\n+)?\s*HASHTAGS:\s*(.*)"
+    label_hash_match = re.search(label_hash_pattern, cleaned_text, re.IGNORECASE | re.DOTALL)
+    
+    if label_hash_match:
+        res["hashtags"] = label_hash_match.group(1).strip()
+        cleaned_text = cleaned_text[:label_hash_match.start()].strip()
+    else:
+        # Cơ chế AGGRESSIVE: Tìm cụm hashtags tự do ở cuối (ví dụ: "#Bitcoin #Crypto")
+        # Tìm từ cuối lên, lấy các dòng chỉ chứa hashtags
+        lines = cleaned_text.split("\n")
+        hashtag_lines = []
+        content_lines = []
+        
+        # Duyệt từ dưới lên
+        in_hashtag_block = True
+        for line in reversed(lines):
+            stripped_line = line.strip()
+            if not stripped_line:
+                continue
+            # Nếu dòng bắt đầu bằng # và có vẻ là 1 list hashtags
+            if in_hashtag_block and all(word.startswith("#") for word in stripped_line.split()):
+                hashtag_lines.insert(0, stripped_line)
+            else:
+                in_hashtag_block = False
+                content_lines.insert(0, line)
+        
+        if hashtag_lines:
+            res["hashtags"] = " ".join(hashtag_lines).strip()
+            cleaned_text = "\n".join(content_lines).strip()
     
     # 2. TRÍCH XUẤT IMPACT (Nếu có)
     impact_pattern = r"(?:\|\|\||\n+)?\s*IMPACT:\s*(.*)"

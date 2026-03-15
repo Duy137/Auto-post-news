@@ -30,55 +30,57 @@ class ExpressListener:
         self.last_publish_time = 0.0
 
     async def start(self):
-        """Khởi động Listener và kết nối Telegram."""
+        """Khởi động Listener với Reconnection State Machine (Production Grade)."""
         if not self.enabled:
             logger.info("Express Lane is DISABLED in config.")
             return
             
         if not self.api_id or self.api_id == "dummy_api_id" or not self.api_hash or self.api_hash == "dummy_api_hash":
-            logger.warning("Telegram API ID/Hash is not configured properly in .env or config.py. Express Listener cannot start.")
+            logger.warning("Telegram API ID/Hash is not configured properly. Express Listener cannot start.")
             return
 
-        logger.info(f"Initializing Express Listener for channel: {self.source_channel}...")
-        
-        # Session name = 'express_session' (nhiều account Telegram có thể yêu cầu xác thực bằng code lần đầu chạy)
-        try:
-            api_id_int = int(self.api_id)
-        except ValueError:
-            logger.error(f"Invalid api_id format: {self.api_id}. It must be an integer.")
-            return
-            
+        api_id_int = int(self.api_id)
         from telethon.sessions import StringSession
         from config import DATA_DIR
         import os
         
-        string_session_val = os.environ.get("TG_STRING_SESSION")
-        if string_session_val:
-            logger.info("Using StringSession from Environment variables for Cloud Deployment.")
-            self.client = TelegramClient(StringSession(string_session_val), api_id_int, self.api_hash)
+        # Initialize Client once
+        session_val = os.environ.get("TG_STRING_SESSION")
+        if session_val:
+            self.client = TelegramClient(StringSession(session_val), api_id_int, self.api_hash)
         else:
-            logger.info("Using local File Session.")
             session_path = os.path.join(DATA_DIR, 'express_session')
             self.client = TelegramClient(session_path, api_id_int, self.api_hash)
         
-        # Đăng ký hàm xử lý sự kiện khi có tin nhắn mới tới source_channel
+        # Register Handler
         @self.client.on(events.NewMessage(chats=self.source_channel))
         async def handler(event):
             await self.handle_new_message(event)
 
-        logger.info("Connecting to Telegram API...")
-        # Bắt đầu kết nối (nếu lần đầu nó có thể hỏi số điện thoại trên terminal, cần chỉnh tay nếu ko có session)
-        await self.client.start(phone=self.phone)
-        logger.info("✅ Express Listener CONNECTED and listening for breaking news!")
-        
-        # Chạy mãi mãi cho tới khi loop bị dừng
+        # Connection State Machine Loop
+        backoff = 5
         while True:
             try:
+                if not self.client.is_connected():
+                    logger.info("Connecting to Telegram API...")
+                    await self.client.start(phone=self.phone)
+                
+                # Verify Authorization
+                if not await self.client.is_user_authorized():
+                    logger.error("🛑 Telegram Session is NOT authorized. Please login locally first and update TG_STRING_SESSION.")
+                    return # Exit to let Supervisor handle or wait
+
+                logger.info("✅ Telegram Connected & Authorized. Listening...")
+                backoff = 5 # Reset backoff on success
+                
                 await self.client.run_until_disconnected()
-                break # Nếu nhảy ra được đây thường là do gọi stop() 
+                
             except Exception as e:
-                logger.error(f"Express Listener connection dropped: {e}. Reconnecting in 5s...")
-                await asyncio.sleep(5)
+                logger.error(f"⚠️ Express Listener connection dropped: {e}")
+                logger.info(f"🔄 Reconnecting in {backoff}s...")
+                await asyncio.sleep(backoff)
+                # Exponential backoff 5s -> 10s ... -> 300s
+                backoff = min(backoff * 2, 300)
 
     async def handle_new_message(self, event):
         """Hàm xử lý khi có tin nhắn mới."""
