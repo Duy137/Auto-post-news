@@ -188,8 +188,15 @@ SCORING_WEIGHTS: ScoringWeights = {
         "macro_politics": ["bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "cpi", "rate"],
         "major_tech": ["mainnet", "protocol", "network", "roadmap"],
         "price_analysis": [
-            "surge", "surges", "rally", "rallies", "climb", "climbs", "jump", "jumps", "soar", "soars", "drop", "drops", "slide", "slides", "plunge", "plunges",
-            "analyst says", "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern"
+            "price", "surge", "surges", "rally", "rallies", "climb", "climbs", "jump", "jumps", "soar", "soars", "drop", "drops", "slide", "slides", "plunge", "plunges", "dips", "dip", "pump", "dumps", "dumping", "pumped", "dumped", "bullish", "bearish",
+            "analyst says", "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern", "resistance", "support", "breakout", "break down",
+            "trendline", "moving average", "EMA", "SMA", "Take It To", "bottom", "top", "on track to", "Crypto Today", "The Daily", "hits", "hit",
+            "RSI", "MACD", "overbought", "oversold",
+            "fibonacci", "retracement",
+            "consolidation", "accumulation", "distribution",
+            "double top", "double bottom",
+            "head and shoulders", "inverse head and shoulders",
+            "cup and handle", "ascending triangle", "descending triangle",  "on track to", "set to", "poised to", "targeting", "toward $", "could hit", "will hit", "can reach",
         ],
         "priority_event": [
             "investigation", "lawsuit", "enforcement", "subpoena",
@@ -217,7 +224,7 @@ SCORING_WEIGHTS: ScoringWeights = {
     "CAPITAL_FLOW_BONUS": 4.0,
     
     # Token-Aware Scoring
-    "major_tokens": ["BTC", "Bitcoin", "ETH", "Ethereum", "BNB", "SOL", "Solana", "XRP", "Ripple", "ADA", "Cardano", "DOGE", "Dogecoin", "TRX", "Tron", "DOT", "Polkadot", "LTC", "Litecoin", "SHIB", "UNI", "Uniswap", "AVAX", "Avalanche", "MATIC", "Polygon", "LINK", "Chainlink", "APT", "Aptos", "ARB", "Arbitrum", "OP", "Optimism", "SUI", "INJ", "Injective", "NEAR", "ATOM", "Cosmos", "FTM", "Fantom", "AAVE", "MKR", "OKB"],
+    "major_tokens": ["BTC", "Bitcoin", "ETH", "Ethereum", "BNB", "SOL", "Solana", "XRP", "Ripple", "ADA", "Cardano", "DOGE", "Dogecoin", "TRX", "Tron", "DOT", "Polkadot", "LTC", "Litecoin", "SHIB", "UNI", "Uniswap", "AVAX", "Avalanche", "MATIC", "Polygon", "LINK", "Chainlink", "APT", "Aptos", "ARB", "Arbitrum", "OP", "Optimism", "SUI", "INJ", "Injective", "NEAR", "ATOM", "Cosmos", "FTM", "Fantom", "AAVE", "MKR", "OKB", "HYPE"],
     "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Gemini", "Bitstamp"],
     
     # Compound Regex for specific tech assets (Sử dụng trong rank.py, cấu hình ở đây cho dễ quản lý)
@@ -440,7 +447,7 @@ EXPRESS_CONFIG = {
 }
 
 # --- CẤU HÌNH RSS LOOP THỜI GIAN CHỜ ---
-RSS_LOOP_INTERVAL = 120 * 60 # 15 minutes by default
+RSS_LOOP_INTERVAL = 240 * 60 # 15 minutes by default
 
 # Thư mục chứa Data
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")

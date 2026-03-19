@@ -1,70 +1,87 @@
-# Hệ Thống Chấm Điểm Ranking Engine (V4.0 - Tiered & Context-Aware)
+# Hệ Thống Chấm Điểm Ranking Engine (V3.0 - Token-Aware & Context Filter)
 
 Chào Kiến trúc sư và Người vận hành,
 
-Tài liệu này giải thích chi tiết toàn bộ cơ chế hoạt động của `modules/rank.py`. Phiên bản 4.0 giới thiệu khả năng **Phân tầng ưu tiên (Tiered Priority)** và **Bộ lọc ngữ cảnh (Contextual Filter)** để giải quyết triệt để bài toán: *Làm sao để ưu tiên tin cực nóng nhưng không bị phạt oan khi bài tin đó có chứa từ khóa liên quan đến biến động giá.*
+Tài liệu này giải thích chi tiết toàn bộ cơ chế hoạt động của `modules/rank.py` và cách chúng ta "dạy" hệ thống nhận diện tin tức thông qua `config.py`. Hệ thống được thiết kế hoàn toàn theo logic **Chấm điểm tất định (Deterministic Scoring)**, không sử dụng LLM ở bước phân loại để thiết lập độ tin cậy tuyệt đối và chống lại rác đầu cơ.
+
+Mục tiêu tối thượng của Ranking Engine: **Đưa tin tức sự kiện thực sự tác động đến thị trường (Market-Moving Events, SEC, Hacks) lên Top 1, đồng thời tiêu diệt thẳng tay các bài viết sặc mùi nhận định, dự đoán giá (Price Speculation).**
 
 ---
 
 ## 🏗️ 1. Cấu Trúc Tổng Thể (The Formula)
 
-Điểm số bài báo (Final Score) được tính dựa trên lõi Biên Tập nhân với các hệ số Viral và Decay:
-`Total Score = (Base + Editorial_Score) * Viral_Potential * Time_Decay * Source_Credibility`
+Điểm số cuối cùng của mỗi bài báo (Final Score) được tính qua công thức:
+`Total Score = (Base + Editorial_Score) * Viral_Potential * Time_Decay * Source_Credibility * Throttling_Penalty`
+
+Trong đó:
+*   `Base`: Điểm sàn mặc định.
+*   `Editorial_Score`: Điểm biên tập (Trọng tâm của tính năng Phân loại rổ từ khóa, Capital Flow và Token-Aware).
+*   `Viral_Potential`: Tiềm năng lan truyền (Chứa Momentum chéo giữa các báo & Cú shock từ vựng).
+*   `Time_Decay`: Độ thối rữa theo thời gian (Tin càng cũ càng mất điểm).
 
 ---
 
-## 🎯 2. Logic Phân Tầng & Chấm Điểm (Tiered Scoring)
+## 🎯 2. Logic Biên Tập Chống Đầu Cơ (Anti-Speculation)
 
-### Tier 1: Sự kiện Ưu Tiên Tuyệt Đối (Priority Events)
-Hệ thống định nghĩa rổ `priority_event` trong `config.py` dành cho các tin "bom tấn":
-*   **Hành động pháp lý:** SEC Investigation, Lawsuit, Subpoena.
-*   **Sự cố bảo mật:** Hack, Exploit, Breach.
-*   **Vận hành sàn:** Halt withdrawals, Suspend trading.
-=> Các bài này được cộng điểm cực lớn và **luôn có log Debug** để theo dõi.
+Thuật toán V3 áp dụng cơ cấu **Lọc Đầu Cơ Hai Lớp (Two-Layer Speculation Filter)** cực kỳ thù hận với rác xả bờ:
 
-### Tier 2: Dòng Tiền Lớn (Advanced Capital Flow)
-Sử dụng Regex thông minh để phát hiện các con số triệu/tỷ USD hoặc ETH/BTC lớn (Ví dụ: "$50M", "10,000 ETH").
-*   **Thưởng nóng (+4.0đ):** Cho bất kỳ bài nào chứa bằng chứng về dòng tiền lớn.
+### Lớp 1: Bắn Bỏ Tại Chỗ (Hard Reject)
+Hệ thống sử dụng `SPECULATION_HARD_REJECT_PATTERN` trong config.
+Bất cứ tựa bài nào chứa "price target", "price prediction", "analyst predicts",... sẽ bị gán ngay lập tức điểm **-999.0**.
+Bài báo bị vứt bỏ trước khi tốn CPU chạy thuật toán, log in ra `🛑 [FILTERED]`.
 
-### Tier 3: Token-Aware Logic
-*   **Thương hiệu lớn (+2.0):** Thưởng nếu bài liên quan đến Top Tokens/Exchanges có kèm sự kiện thực tế.
-*   **Thầy dùi (-10.0/-12.0):** Phạt nặng nếu nhắc đến Token nhưng nội dung chỉ là phân tích giá.
+### Lớp 2: Phạt Nhẹ & Phạt Mềm (Soft Penalty & Keyword Cap)
+Nếu bài báo lọt qua lớp 1 (ví dụ bài ghi "Bitcoin Rallies" hay "ETH Surges"), từ khóa sẽ rơi vào rổ `price_analysis` (Cap phạt: -18.0).
+*   **Token-Aware Cắn Trả:** Nếu bài báo có cụm từ "Rally" và cố tình chèn thêm Tên Major Token (BTC, ETH) mà *KHÔNG HỀ* có bất cứ sự kiện thực tế nào đi kèm -> Nó bị dã thêm một đòn `SPECULATION_SOFT_PENALTY_SCORE` (-12.0) nữa. Điểm âm vô cực.
 
 ---
 
-## 🛡️ 3. Bộ Lọc Speculation Hai Lớp (Two-Layer Filter)
+## 🛡️ 3. Ưu Tiên Sự Kiện Nhóm 1 & Bộ Lọc Ngữ Cảnh (Contextual Filter)
 
-Để tiêu diệt tin rác đầu cơ nhưng không giết nhầm tin tốt, hệ thống dùng 2 lớp:
+Để tránh việc "Giết lầm hơn bỏ sót" (Ví dụ tin tức: *"XRP Tăng Vọt (+Phạt) Sau Khi SEC Bãi Bỏ Vụ Kiện (+Thưởng)"*), V3 thiết kế nên **Contextual Filter**.
 
-1.  **Lớp 1: Chặn Cứng (Hard Reject):**
-    Quét qua `SPECULATION_HARD_REJECT_PATTERN`. Nếu tiêu đề chứa cụm từ như "Price Prediction", "Price Target", "Forecast $...", hệ thống **vứt bài ngay lập tức** (điểm -999.0).
-2.  **Lớp 2: Phạt Mềm & Bộ lọc Ngữ Cảnh (Contextual Filter):**
-    Bình thường, các từ như "Surge", "Rally", "Plunge" sẽ bị phạt nặng (**-18.0đ**).
-    **TUY NHIÊN:** Nếu bài báo đó **VỪA** có từ biến động giá, **VỪA** có từ khóa thuộc nhóm `priority_event` (Ví dụ: "Bitcoin surges after ETF Approval"), hệ thống sẽ tự động **giảm 70% mức phạt**. Điều này giúp các tin tức quan trọng có biến động giá đi kèm vẫn được đăng.
+### Rổ Priority Event (Tier 1)
+Nhóm từ khóa VVIP được xác định là thao túng cục diện thị trường (e.g., "Lawsuit", "Hack", "Halt withdrawals", "SEC").
+Bài viết chứa nhóm này tự động đẩy form lên cao nhất, không có khái niệm trượt rank.
 
----
-
-## 🌪️ 4. Sức Mạnh Lan Truyền (Viral Potential)
-... (Giữ nguyên cơ chế Momentum và Shock Score) ...
-
----
-
-## ⏳ 5. Quan sát & Tinh chỉnh (Observability)
-
-Phiên bản này bổ sung log `📊 [RANK DEBUG]` chi tiết từng thành phần:
-- Xem cụ thể điểm thưởng Keyword, điểm thưởng Dòng tiền, và điểm phạt bị giảm nhờ Context Filter.
-- **Quy tắc vàng:** Nếu tin rác vẫn lọt, chỉ cần thêm từ khóa vào rổ `price_analysis` hoặc cập nhật Regex `SPECULATION_HARD_REJECT_PATTERN` trong `config.py`.
-�� không bao giờ bùng nổ vượt quá mức cho phép (Khóa khung nhân tử từ `0.7x` đến `1.8x`).
+### Contextual Filter (Gỡ Hình Phạt)
+Hàm chấm điểm sẽ kiểm tra Logic:
+*Nếu* bài viết bị phạt mảng `price_analysis` (Rally, Surge) *NHƯNG* bài viết có chứa dấu hiệu của `market_moving` hoặc `priority_event` (Ví dụ: Hack, Approval).
+**-> Hình phạt bị giảm 70%**.
+Cơ chế này hiểu rằng: Token tăng giá LÀ DO một sự kiện có thật. Đây là tin tức giá trị (Đưa tin giá), không phải tin Thầy dùi phím hàng (Nhận định giá).
 
 ---
 
-## ⏳ 4. Thối Rữa Thời Gian & Uy Tín (Decay & Credibility)
+## 💰 4. Theo Dõi Dòng Vốn (Capital Flow Bonus - Tier 2)
 
-*   **Time Decay:** Công thức hàm nón lá (Exponential Decay). Cứ mỗi giờ trôi qua kể từ lúc báo xuất bản, hệ số điểm sẽ giảm dần đều. Một tin dù nóng cỡ nào nhưng xảy ra cách đây 3 ngày thì kết quả phép nhân = `0.something` -> Đưa nó về cát bụi để chừa sóng cho tin Break hôm nay.
-*   **Uy tín (Credibility):** CoinTelegraph (Hệ số `1.15x`) sẽ luôn thắng thế một trang blog vô danh (Hệ số `1.0x`) nếu cùng đưa 1 nội dung.
+Hệ thống tích hợp Regular Expression tinh vi cực mạnh `CAPITAL_FLOW_REGEX` nằm trong config.
+Nhiệm vụ: Truy tìm dòng tiền cá voi.
+Bất cứ bài báo nào chứa các mệnh giá khổng lồ theo chuẩn: `$50M`, `€100k`, `1000 BTC`, `500k ETH`, `2 Billion USD`.
+Hệ thống cộng ngay lập tức một bùa `CAPITAL_FLOW_BONUS` (Mặc định +4.0 điểm). Sự kiện kinh tế sẽ được ưu ái hiển thị.
 
 ---
 
-## Tính Ứng Dụng Dành cho Vận Hành:
-Làm thế nào để tinh chỉnh hướng đi của hệ thống nếu tin rác vẫn lọt vào lưới?
-=> Cực kỳ đơn giản: Bạn CHỈ CẦN mở `config.py` và ném từ khóa rác đó vào rổ `price_analysis`. Thuật toán Toán học ở `rank.py` sẽ lo mọi khâu hành quyết còn lại. Hệ thống vĩnh viễn không cần thay đổi source code ở lõi.
+## 🌪️ 5. Hệ Số Lan Truyền (Viral Potential)
+
+Sau khi tính `Editorial_Score`:
+*   **Sức Nóng Dư Luận (Cross-Source Momentum):** Nếu SEC kiện Binance, cả CoinTelegraph lẫn CoinDesk đồng loạt đăng trong vài giờ qua -> Thuật toán Jaccard so sánh chéo phát hiện 2 nội dung giống nhau -> Hệ số lây lan (Momentum Score) được cộng dội lên gấp khúc.
+*   **Từ vựng Gây Sốc (Shock Score):** Tựa bài chứa "FBI", "Raid", "Emergency" -> Kick-start viral multiplier.
+
+---
+
+## ⚙️ Hướng dẫn Debug cho Vận hành viên
+
+Khi System chạy, nếu có tin tức nào bay vào danh sách "Khá Khẩm" (Score > 8.0) hoặc dính thẻ Priority Event. Hệ thống sẽ tạc thẳng một bảng thông số **`📊 [RANK DEBUG]`** lên Console Terminal.
+
+Ví dụ:
+```text
+📊 [RANK DEBUG] Article: 'SEC Launches Investigation into Major Crypto Exchange...'
+  [+] Base: 8.0 | Editorial Verbs: 4.5 | Source Cred: 1.0
+  [+] Kw Bonus: 15.00 | Capital Flow: +0.0 | Token Mod: +2.0
+  [-] Penalty: 0.00 | Fatigue: 0.0
+  [*] Mults: Viral=1.27 | TimeDecay=2.27
+  [*] Keywords Found: ['investigation', 'court', 'lawsuit', 'charges']
+  => FINAL_SCORE    : 38.32
+```
+
+Dựa vào bảng này, bạn sẽ đọc được lý do tại sao Bot lại Pick bài đó, nó bị trừ bao nhiêu điểm do thối rữa/do đầu cơ, nó lấy được Keyword Bonus từ đâu. Nếu rác lọt lưới, chỉ cần nhét cụm từ rác đó vào rổ `price_analysis` trong file `config.py` và thế là xong! Tương tự, nếu bỏ sót một sự kiện bùng nổ, hãy thêm từ khóa đó vào `priority_event`.

@@ -2,9 +2,9 @@
 
 Chào mừng bạn! Đây là hệ thống **Biên tập viên AI** chuyên nghiệp, tự động săn tìm tin tức nóng hổi, dùng Trí Tuệ Nhân Tạo (Gemini/OpenAI) để tóm tắt thông minh và đăng bài tự động lên các mạng xã hội (Twitter/X, Telegram, Facebook) của bạn 24/7.
 
-Hệ thống hoạt động với sức mạnh **"Đa Luồng" (Dual-Lane)**:
-1. **Luồng RSS (Báo Phân Tích):** Rà quét các trang báo định kỳ (vd: mỗi 15 phút), tự chấm điểm độ nóng của tin, gạn lọc tin trùng, và chọn ra tin hay nhất để tóm tắt và đăng.
-2. **Luồng Express (Tin Cực Nhanh):** Cắm trực tiếp vào ứng dụng Telegram của bạn để nghe lóng một kênh tin tức khẩn cấp. Vừa có tin "Break" là AI lập tức xào nấu và phóng lên mọi mặt trận ngay lập tức (không độ trễ).
+Hệ thống hoạt động với sức mạnh **"Đa Luồng" (Dual-Lane)** và lưu trữ trạng thái tuyệt đối an toàn trên **SQLite**, không còn sử dụng file JSON thủ công:
+1. **Luồng RSS (Báo Phân Tích):** Rà quét các trang báo định kỳ (vd: mỗi 15 phút), tự chấm điểm độ nóng của tin qua bộ lọc V3 chuyên diệt rác đầu cơ, gạn lọc tin trùng bằng Idempotency Guard, và chọn ra tin hay nhất để tóm tắt và đăng.
+2. **Luồng Express (Tin Cực Nhanh):** Cắm trực tiếp vào ứng dụng Telegram của bạn để nghe lóng một kênh tin tức khẩn cấp. Vừa có tin "Break" là AI lập tức xào nấu và phóng lên mọi mặt trận.
 
 File này được viết siêu đơn giản để **ai chưa từng lập trình cũng có thể làm được**. Hãy làm theo từng bước nhé!
 
@@ -121,12 +121,15 @@ python main.py
 
 Sự thông minh của Bot nằm ở file `config.py`. Bạn hoàn toàn được phép sửa chữ ở các vùng sau:
 
-### 1. Dạy Bot bắt "Từ Khóa Vàng" (Mục `SCORING_WEIGHTS`)
+### 1. Dạy Bot bắt "Từ Khóa Vàng" (Mục `SCORING_WEIGHTS` trong `config.py`)
 Hãy định nghĩa lại thế giới quan của Bot:
-- **`keyword_categories`**: Đây là rổ từ khóa. Ví dụ các từ khóa thuộc nhóm `market_moving` (như "hack", "funding", "listing") sẽ được điểm rất cao. Nhóm `price_analysis` (như "analyst predicts", "price target") sẽ bị điểm âm.
-- **`keyword_caps`**: Chỉnh điểm trần. Từ khóa `market_moving` xứng đáng lọt top được cấp dải điểm rộng (15.0).
-- **`major_tokens` / `major_exchanges`**: Đây là bộ lọc Token-Aware (Siêu Tính Năng). Nếu bài báo có nhắc đến tên Token/Sàn ở đây, *CỘNG THÊM* từ khóa Market Moving -> *Cộng ngay 2.0đ Thưởng*. Ngược lại, Tên Token *CỘNG THÊM* bài viết sặc mùi Đầu cơ phân tích chiều giá -> *Trừ ngay 10.0đ Phạt* (giết rank ngay lập tức).
-- **`editorial_verbs`**: Các động từ mạnh mẽ báo hiệu tin nóng nổ ra. Nếu báo đưa tựa đề có chữ `"hacked"`, cộng 4.5 điểm!
+- **`keyword_categories`**: Đây là rổ từ khóa. V3 chia thành các rổ cực kỳ chuyên biệt:
+  - `priority_event`: Sự kiện thao túng thị trường (SEC, Hack, Halted Withdrawals). Lọt rổ này thì bài viết chắc chắn bay thẳng lên top!
+  - `market_moving`: Các tin tức cốt lõi (Listing, Funding, Integration).
+  - `price_analysis`: Rổ "Tội phạm". Chỗ chứa các từ "analyst predicts", "rally", "surge". Gặp từ này điểm sẽ bị dìm cực mạnh (-18.0) trừ khi đang kết hợp với sự kiện thật (Context Filter).
+- **Hard Reject `SPECULATION_HARD_REJECT_PATTERN`**: Bot bắn bỏ không thương tiếc các tựa bài chứa "price target" hay "price prediction" mà không thèm chấm.
+- **`CAPITAL_FLOW_REGEX`** (Bắt cá voi): Bất cứ tin tức nào chứa "$50M", "10,000 ETH" sẽ được cộng điểm thưởng dòng vốn ngay lập tức.
+- **`major_tokens` / `major_exchanges`**: Đây là bộ lọc Token-Aware (Siêu Tính Năng). Nếu bài báo có nhắc đến tên Token/Sàn ở đây, *CỘNG THÊM* từ khóa Market Moving -> *Cộng ngay Thưởng*. Ngược lại, Tên Token *CỘNG THÊM* bài viết sặc mùi Đầu cơ phân tích chiều giá -> *Nện ngay hình phạt -12.0 Soft Penalty*.
 
 ### 2. Định Hình Nét Chữ AI (Mục `PROMPT_TEMPLATES`)
 Hệ thống nay đã chia làm 2 bộ não: Não tin hỏa tốc (EXPRESS) và Não tin sâu (RSS). Bạn có thể đổi văn phong từng não riêng biệt:

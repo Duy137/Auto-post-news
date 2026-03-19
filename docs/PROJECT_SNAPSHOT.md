@@ -1,52 +1,74 @@
-# PROJECT_SNAPSHOT: AI News Auto Post Bot (V2.2 Tiered & Hardened Architecture)
+# PROJECT_SNAPSHOT: AI News Auto Post Bot (V3.0 Deterministic & Idempotent Architecture)
+
+> **AI INSTRUCTION: When starting a new chat, read this file carefully. It contains the absolute source of truth for the entire system architecture, state management, scoring logic, and edge case handling.**
 
 ## 1. System Overview
-A production-grade, automated bot that operates on a Dual-Lane architecture, refined for high-impact signal detection and network resilience.
+A production-grade, automated bot that operates on a **Dual-Lane architecture**:
+- **Express Lane (Event-Driven):** Captures breaking news from Telegram, deduplicates via macro-entity fingerprinting, processes it rapidly, and publishes it immediately.
+- **RSS Lane (Interval-Driven):** Aggregates deeper macro/crypto news via RSS feeds, evaluates and ranks articles objectively using a Token-Aware Deterministic Ranking Engine, and publishes the top selections.
 
-## 2. Lane Pipeline Flow
-### RSS Lane (Standard)
-- **Collect:** Uses `requests.Session` for persistent TCP connections. Limits ingestion to 20 items/source to prevent overhead.
-- **Deduplicate:** SQLite-backed idempotency.
-- **Rank:** Deterministic Tiered Ranking Engine (V4.0).
-  - **Tier 1 (Priority Events):** Explicit support for SEC actions, Hacks, and Exchange halts with high scoring weights.
-  - **Tier 2 (Capital Flow):** Bonus points (+4.0) for large fund movements detected via advanced regex.
-  - **Tier 3 (Token-Aware):** Context-aware awards/penalties for major assets.
-  - **Contextual Filter:** Mitigates speculation penalties by 70% if the news also matches a priority event keyword (e.g., "Surges after ETF Approval").
-  - **Two-Layer Filter:** Hard-rejects blatant predictions (-999.0) while applying soft penalties (-18.0) to price movement commentary.
-- **Publish:** Explicit Telegram send logs for total observability.
-- **Select:** Sorts and selects the top candidates.
-- **Summarize:** Routes to LLM to generate platform-compliant content. Uses an **Ultimate Regex Fallback Parser** to guarantee robust extraction (Headline, Summary, Impact, Hashtags) regardless of AI hallucination or custom separators.
-- **Publish:** Pushes generated content to configured platforms (e.g., Twitter, Telegram, Facebook) with lane-specific formatting rules (e.g., preserving hyperlinks only for RSS, omitting HASHTAGS on Telegram to keep the channel clean).
+The system leverages LLMs (Gemini/OpenAI) to rewrite content into concise formats tailored for specific platforms, operating autonomously with robust state-driven reliability, graceful crash recovery, and extreme idempotency guards.
 
-### Express Lane (Breaking News)
-- **Listen:** Telegram listener detects messages in specified channels.
-- **Hard Dedup:** Blocks exact historical duplicates (24h hash window).
-- **Keyword Filter:** Fast-pass scoring to drop low-value chatter.
-- **Fingerprint Dedup:** Entity-level deduplication (60-minute window) using Proper Nouns and Macro-Economics Static Entities (e.g., "Thụy Sĩ", "Unemployment", "Israel") to prevent spamming the same event across different news sources.
-- **Throttle:** Configurable minimum time gap (e.g., 3 mins) between posts.
-- **Summarize & Publish:** Rapid LLM rewrite and instant publishing with delayed retry mechanisms. Output format strips source links and uses alert emojis (`🚨`).
+## 2. Global State & Idempotency Design (CRITICAL)
+The system has entirely eradicated legacy JSON files. **SQLite (`data/article_state.db`) is the Absolute Single Source of Truth.**
 
-## 3. Production Hardening Features
-- **Network Resilience:** Implemented `requests.Session` with split timeouts `(3.05, 10)` and HTTP status validation to prevent parsing 4xx/5xx error pages.
-- **Idempotency Accuracy:** Metrics now distinguish between successful `POSTED` events and `SKIPPED (Duplicate)` events.
-- **Observability:** Centralized `📊 [RANK DEBUG]` logging provides a complete breakdown of why an article was selected or rejected.
+### A. Publisher Guard (The Ultimate Idempotency Layer)
+- **Table:** `published_events`
+- **Purpose:** Prevents duplicate posting per platform. Every final publish attempt is tracked via an `event_fp` (e.g., `telegram:rss:12345hash`).
+- **Logic:** The publisher checks this table *before* making the API call. If a post exists, it returns `success=False` and `is_duplicate=True`. The calling Lanes treat `is_duplicate=True` as a handled case, skipping the post, updating log metrics correctly (Skip instead of Success), and transitioning the article state to `POSTED` without incrementing the actual publish counter.
 
-## 4. State & Idempotency Design
-- **SQLite (`data/article_state.db`):** The *Absolute Single Source of Truth* for the entire project. All legacy JSON footprint (`posted_tweets.json`, `seen_articles.json`) has been completely eradicated.
-- **Fingerprinting (`recent_topics`):** Shared across both lanes. Express lane outputs lock fingerprints for 60 minutes. RSS lane verifies against this table to suppress older duplicate articles (Cooldown Suppression Hook).
-- **Publisher Guard:** Idempotency tracking embedded cleanly inside SQLite (`published_events`) to prevent duplicate API posting per platform, even during retry logic. `PlatformResult` now includes an `is_duplicate` flag to ensure accurate metrics.
+### B. Fingerprint Cooldown (Cross-Lane Suppression)
+- **Table:** `recent_topics` 
+- **Purpose:** Prevents the Bot from spamming the same event across different news sources.
+- **Logic:** Express lane logs macro-entities (e.g., "Thụy Sĩ", "CPI") upon posting. RSS lane extracts fingerprints from its articles. If the RSS fingerprint exists in `recent_topics` within a 60-minute window, the RSS article receives a massive penalty (`rss_penalty_multiplier = 0.1x`) ensuring it doesn't rank high enough to be posted.
 
-## 5. Key Modules
-- `main.py`: The async orchestrator governing the concurrent execution of the Express Listener and the RSS polling loop.
-- `express_listener.py`: The event-driven Telegram hook. Resolves bound `loop` AsyncIO contexts gracefully.
-- `express_filter.py & express_fingerprint.py`: Handle rapid deduplication natively via hardcoded macro-entity lexicons.
-- `state_manager.py`: Controls SQLite schema, WAL transactions, automated database sweeping, and fingerprint/cooldown state logic.
-- `rank.py`: The deterministic intelligence scoring module providing absolute transparency via point breakdowns.
-- `summarize.py`: Resolves dynamic prompts, routes requests to LLMs (OpenAI/Gemini) with automatic rate-limit backing off, and guarantees structural integrity via extreme regex fallbacks.
-- `publisher.py`: Translates verified articles into REST API calls for mapped platforms via a unified engine, distinguishing physical formats between `RSS` and `EXPRESS` lanes.
-- `config.py`: The central nervous system containing all global variables, toggle flags, API Keys, Platform Mappings, Prompt Templates, and zero-JSON file path setups.
+## 3. Dual-Lane Pipeline Flow
 
-## 6. Current Operational Status
-- **Phase 10 Completed:** The Dual-Lane V2.1 Architecture is structurally sealed, feature-complete, rigorously decoupled, and 100% JSON-independent.
-- **Phase 11 (Market-Moving Scoring) Completed:** Integrated Token-Aware modifiers to correctly identify and prioritize high-value market drivers over speculative analysis.
-- **Future Ready:** Capable of scaling entirely new Lanes or Platforms by solely injecting them into the `PLATFORM_MAPPING` and `PROMPT_TEMPLATES` config engine without tearing down core executors.
+### RSS Lane (Standard Flow)
+1. **Collect:** Ingests raw RSS feeds (`requests.Session` with status code validation). Parses max 20 items per feed to prevent OOM on Railway.
+2. **Deduplicate:** Hard URL/GUID dedup via SQLite `rss_items` table.
+3. **Rank:** Token-Aware Deterministic Ranking Engine (See Section 4).
+4. **Select:** Sorts and selects the top candidates exceeding a threshold (e.g., 8.0).
+5. **Summarize:** Routes to LLM to generate platform-compliant content. Uses an **Ultimate Regex Fallback Parser** to guarantee robust extraction (Headline, Summary, Impact) regardless of AI hallucination.
+6. **Publish:** Pushes generated content to configured platforms based on `PLATFORM_MAPPING`. Checks the Idempotency Guard first.
+
+### Express Lane (Breaking News Flow)
+1. **Listen:** Telethon listener (`express_listener.py`) detects messages in specified Telegram channels.
+2. **Hard Dedup:** Blocks exact historical duplicates (24h hash window).
+3. **Keyword Filter:** Fast-pass scoring (`EXPRESS_FILTER_KEYWORDS` in `config.py`) to drop low-value chatter.
+4. **Fingerprint Dedup:** Entity-level deduplication (60-minute window) to block immediate repetition.
+5. **Throttle:** Configurable minimum time gap (e.g., 3 mins) between posts.
+6. **Summarize & Publish:** Rapid LLM rewrite (Urgent Prompt). Checks Publisher Idempotency Guard. Skips cleanly if recognized as a duplicate retry.
+
+## 4. The Ranking Engine (V3.0 Logic)
+Located in `modules/rank.py`, configured entirely via `config.py`. It is deterministic and extremely aggressive against speculative noise.
+
+### Core Equation
+`Total Score = (Base + Editorial_Score) * Viral_Potential * Time_Decay * Source_Credibility`
+
+### Tiered Event Prioritization & Token-Aware Logic
+- **Tier 1 (Priority Events):** `priority_event` bucket (SEC actions, hacks, exchange halts). Guaranteed to skyrocket the score.
+- **Tier 2 (Capital Flow Bonus):** `CAPITAL_FLOW_REGEX` detects massive fiat/crypto movements ($M/$B, ETH, BTC) adding a +4.0 bonus.
+- **Contextual Filter:** If a priority/market-moving event is found alongside a price word (e.g., "BTC surges after ETF Approval"), the severe price penalty is reduced by 70%.
+- **Token-Aware Buffs:** Tions of Major Tokens + Market Moving Events = +2.0 Bonus.
+
+### The Two-Layer Speculation Filter
+- **Layer 1 (Hard Reject):** Any article matching `SPECULATION_HARD_REJECT_PATTERN` (e.g., "price prediction", "price target") is immediately assigned a score of `-999.0` and dropped.
+- **Layer 2 (Soft Penalty):** Words in the `price_analysis` bucket incur a heavy negative cap (e.g., -18.0). If combined with a Major Token without a valid real-world event, it incurs an *additional* `SPECULATION_SOFT_PENALTY_SCORE` (-12.0).
+
+### Viral Potential (Momentum & Shock)
+- Uses Jaccard Similarity to detect if multiple trusted sources report the same event simultaneously (Momentum).
+- Calculates Shock Score based on aggressive vocabulary ("halt", "raid").
+
+## 5. Architectural Decoupling & Future Proofing
+- **Prompt Abstraction:** LLM prompts are fully decoupled in `PROMPT_TEMPLATES`. Resolved dynamically by checking `lane` ("RSS" vs "EXPRESS") and `platform`.
+- **Platform Mapping:** Multi-platform routing is defined entirely in `config.py` via `PLATFORM_MAPPING` (e.g., `{"EXPRESS": ["telegram"], "RSS": ["telegram", "twitter"]}`).
+- **Zero-JSON Footprint:** All state, queues, and deduplication rely strictly on `database/` SQLite files.
+
+## 6. Key Modules Overview
+- `main.py`: The async orchestrator. Handles graceful shutdown and concurrency for Both Lanes.
+- `config.py`: The central nervous system for routing, ranking weights, prompts, and API keys.
+- `modules/collector.py`: Network-hardened RSS fetcher (Uses Session, Timeout splitting, Status code checks).
+- `modules/publisher.py`: Translates articles into REST API calls. Owns the Idempotency Guard. Contains explicit `TELEGRAM_SEND` logs for observability.
+- `modules/rank.py`: Implements the V3 deterministic equation and Contextual Filters. Features a `RANK DEBUG` block in console logs for articles scoring > 8.0.
+- `modules/state_manager.py`: Controls SQLite schema, migrations, WAL transactions, and sweeping mechanisms.

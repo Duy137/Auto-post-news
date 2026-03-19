@@ -174,6 +174,13 @@ async def main():
     
     if ORCHESTRATION_CONFIG.get("express_enabled", True):
         tasks.append(asyncio.create_task(run_supervised_task(run_express_listener, "EXPRESS_LANE")))
+        
+    # 3. Khởi chạy luồng Lên lịch Đăng tin nhắn độc lập (Sẽ chạy ngầm cùng lúc với 2 luồng kia)
+    try:
+        from auto_announcement import run_scheduler_async
+        tasks.append(asyncio.create_task(run_supervised_task(run_scheduler_async, "ANNOUNCEMENT_SCHEDULER")))
+    except ImportError:
+        logger.warning("Could not import auto_announcement. Skipping Announcement Scheduler.")
     
     try:
         await asyncio.gather(*tasks)
