@@ -190,7 +190,7 @@ SCORING_WEIGHTS: ScoringWeights = {
         "price_analysis": [
             "price", "surge", "surges", "rally", "rallies", "climb", "climbs", "jump", "jumps", "soar", "soars", "drop", "drops", "slide", "slides", "plunge", "plunges", "dips", "dip", "pump", "dumps", "dumping", "pumped", "dumped", "bullish", "bearish",
             "analyst says", "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern", "resistance", "support", "breakout", "break down",
-            "trendline", "moving average", "EMA", "SMA", "Take It To", "bottom", "top", "on track to", "Crypto Today", "The Daily", "hits", "hit",
+            "trendline", "moving average", "EMA", "SMA", "Take It To", "bottom", "top", "on track to", "Crypto Today", "The Daily", "hits", "hit", "bears", "bear", "bulls", "bull",
             "RSI", "MACD", "overbought", "oversold",
             "fibonacci", "retracement",
             "consolidation", "accumulation", "distribution",

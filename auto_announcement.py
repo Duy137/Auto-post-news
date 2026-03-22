@@ -2,6 +2,8 @@ import os
 import time
 import datetime
 import requests
+import json
+import sqlite3
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------
@@ -112,7 +114,7 @@ Có những người chơi có lợi thế, nhưng đó có phải là bạn?
 ⚠️ <b>LƯU Ý:</b>
 ⭐️ Nếu bạn thấy không chắc chắn điều gì, hãy chủ động tham khảo Admin trước khi vội vàng hành động.
 ⭐️ Admin sẽ không bao giờ nhắn tin riêng trước cho bạn.
-⭐️ Nguồn lực của team là có hạn. Nếu bạn muốn được hỗ trợ tốt hơn, hãy ủng hộ team để được tham gia nhóm Premium 👉 nhắn tin cho @zayne120 hoặc<a href="https://t.me/CryptoVN101/1852">Làm theo hướng dẫn</a>."""
+⭐️ Nguồn lực của team là có hạn. Nếu bạn muốn được hỗ trợ tốt hơn, hãy ủng hộ team để được tham gia nhóm Premium 👉 nhắn tin cho @zayne120 hoặc<a href="https://t.me/CryptoVN101/1852"> làm theo hướng dẫn</a>."""
 
 # ---------------------------------------------------------
 # 3. CẤU HÌNH LỊCH ĐĂNG BÀI CHÍNH XÁC (SCHEDULES)
@@ -130,21 +132,91 @@ TARGET_CHANNELS_TIN_2 = get_channels_from_env("TARGET_CHANNELS_TIN_2")
 TARGET_CHANNELS_TIN_3 = get_channels_from_env("TARGET_CHANNELS_TIN_3")
 
 SCHEDULES = [
-    # Cấu Hình Tin Nhắn 1 (Thứ Hai lúc 08:30)
+    # Cấu Hình Tin Nhắn 1 (Thứ Bảy lúc 09:00)
     {"name": "Tin nhắn 1", "day": 5, "hour": 9, "minute": 00, "message": MESSAGE_1, "channels": TARGET_CHANNELS_TIN_1},
     
-    # Cấu Hình Tin Nhắn 2 (Thứ Tư lúc 20:00)
+    # Cấu Hình Tin Nhắn 2 (Thứ Bảy lúc 10:00)
     {"name": "Tin nhắn 2", "day": 5, "hour": 10, "minute": 00, "message": MESSAGE_2, "channels": TARGET_CHANNELS_TIN_2},
     
-    # Cấu Hình Tin Nhắn 3 (Thứ Bảy lúc 09:00)
+    # Cấu Hình Tin Nhắn 3 (Chủ Nhật lúc 09:00)
     {"name": "Tin nhắn 3", "day": 6, "hour": 9, "minute": 00, "message": MESSAGE_3, "channels": TARGET_CHANNELS_TIN_3},
 ]
 
 # ---------------------------------------------------------
+# 4. DATA MODEL & SCHEDULE MATERIALIZATION
+# ---------------------------------------------------------
+
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "announcements.db")
+
+def init_db():
+    """Khởi tạo cấu trúc Database cho Lịch tự động."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS announcement_executions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_name TEXT NOT NULL,
+            message_text TEXT NOT NULL,
+            target_channels TEXT NOT NULL,
+            scheduled_time DATETIME NOT NULL,
+            status TEXT DEFAULT 'PENDING',
+            retry_count INTEGER DEFAULT 0,
+            next_retry_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_schedule 
+        ON announcement_executions(job_name, scheduled_time)
+    ''')
+    conn.commit()
+    conn.close()
+
+def materialize_schedules():
+    """Dự phóng lịch đăng bài từ SCHEDULES vào Database cho 7 ngày tới."""
+    now = datetime.datetime.now(VN_TZ)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    inserted_count = 0
+    # Quét từ hôm nay đến 6 ngày tới (đúng 1 tuần = 7 ngày)
+    for d_offset in range(7):
+        target_date = now + datetime.timedelta(days=d_offset)
+        target_weekday = target_date.weekday()
+        
+        for job in SCHEDULES:
+            if job["day"] == target_weekday:
+                # Lắp đúng giờ phút
+                job_time = target_date.replace(hour=job["hour"], minute=job["minute"], second=0, microsecond=0)
+                
+                # Bỏ qua nếu lịch này mốc sinh ra đã ở trong quá khứ so với thời điểm khởi động
+                if job_time < now:
+                    continue
+                    
+                channels_json = json.dumps(job["channels"])
+                # Định dạng ISO cục bộ (VN_TZ) để so sánh chuỗi
+                scheduled_str = job_time.strftime('%Y-%m-%d %H:%M:%S')
+                
+                try:
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO announcement_executions 
+                        (job_name, message_text, target_channels, scheduled_time, status)
+                        VALUES (?, ?, ?, ?, 'PENDING')
+                    ''', (job["name"], job["message"], channels_json, scheduled_str))
+                    if cursor.rowcount > 0:
+                        inserted_count += 1
+                except sqlite3.Error as e:
+                    print(f"⚠️ Lỗi Materialize DB: {e}")
+                    
+    conn.commit()
+    conn.close()
+    if inserted_count > 0:
+        print(f"📅 [SCHEDULER] Đã sinh thêm {inserted_count} lịch post mới cho 7 ngày tới vào Database.")
+
+# ---------------------------------------------------------
 # THE SCHEDULING ENGINE
 # ---------------------------------------------------------
-# Tránh spam nhiều tin trong cùng 1 phút
-_last_posted_timestamp = None
 
 def send_telegram_message(chat_id: str, text: str):
     """Gửi tin nhắn qua Telegram API."""
@@ -172,33 +244,103 @@ def send_telegram_message(chat_id: str, text: str):
         print(f"  ⚠️ Exception khi gửi: {str(e)}")
         return False
 
+MAX_RETRIES = 3
+# Lịch trình Backoff theo phút (Lần 1: đợi 5p, Lần 2: đợi 15p, Lần 3: đợi 60p)
+RETRY_BACKOFF_MINS = {1: 5, 2: 15, 3: 60} 
+
 def check_and_post():
-    """Hàm kiểm tra thời gian hiện tại so với lịch biểu để quăng tin."""
-    global _last_posted_timestamp
+    """Hệ thống quét lịch và bắn Telegram (đủ TTL, Atomic Locking, Retries)."""
+    # 1. Đảm bảo DB và liệu lịch dự phóng cho 7 ngày tới luôn sẵn sàng
+    init_db()
+    materialize_schedules()
     
-    # Ép sử dụng thời gian thực tế tại Việt Nam (kể cả khi rải lên Railway server)
     now = datetime.datetime.now(VN_TZ)
-    current_day = now.weekday()   # 0-6
-    current_hour = now.hour       # 0-23
-    current_minute = now.minute   # 0-59
+    now_str = now.strftime('%Y-%m-%d %H:%M:%S')
     
-    # Mã nhận diện phút hiện tại (VD: Thứ 2 lúc 8:30 -> "0-8-30")
-    current_time_signature = f"{current_day}-{current_hour}-{current_minute}"
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
     
-    # Đã gửi trong phút này rồi thì thôi, chờ qua phút mới
-    if _last_posted_timestamp == current_time_signature:
-        return
+    # 2. TTL Cleanup (Dọn rác các job quá 2 tiếng chưa chạy được để tránh gửi tin nhắn lạc hậu do server down)
+    expiration_limit = (now - datetime.timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+    cursor.execute('''
+        UPDATE announcement_executions 
+        SET status = 'EXPIRED' 
+        WHERE status = 'PENDING' AND scheduled_time < ?
+    ''', (expiration_limit,))
+    if cursor.rowcount > 0:
+        print(f"🗑️ [SCHEDULER] Đã hủy (EXPIRED) {cursor.rowcount} job quá hạn 2 tiếng.")
+        conn.commit()
         
-    for job in SCHEDULES:
-        if job["day"] == current_day and job["hour"] == current_hour and job["minute"] == current_minute:
-            print(f"\n⏰ Phát bài: {job['name']} (Giờ VN: {now.strftime('%H:%M:%S')})")
-            print(f"   Chuẩn bị đẩy tin tới {len(job['channels'])} channel(s): {job['channels']}")
-            
-            for channel in job["channels"]:
-                send_telegram_message(channel, job["message"])
+    # 2.5 Routine Maintenance (Xóa vĩnh viễn dữ liệu cũ hơn 30 ngày để chống phình DB)
+    prune_limit = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+    cursor.execute('''
+        DELETE FROM announcement_executions 
+        WHERE scheduled_time < ?
+    ''', (prune_limit,))
+    if cursor.rowcount > 0:
+        print(f"🧹 [SCHEDULER] Đã xóa vĩnh viễn {cursor.rowcount} lịch sử post cũ hơn 30 ngày để tối ưu DB.")
+        conn.commit()
+        
+    # 3. Lấy Top 10 job tới giờ chạy (Initial hoặc Retry) tránh starvation
+    cursor.execute('''
+        SELECT * FROM announcement_executions 
+        WHERE status = 'PENDING' 
+          AND (
+             (next_retry_at IS NULL AND scheduled_time <= ?)
+             OR
+             (next_retry_at IS NOT NULL AND next_retry_at <= ?)
+          )
+        ORDER BY scheduled_time ASC LIMIT 10
+    ''', (now_str, now_str))
+    pending_jobs = cursor.fetchall()
+    
+    for job in pending_jobs:
+        job_id = job["id"]
+        
+        # 4. Atomic Lock (Khóa tiến trình chống chạy trùng lặp)
+        cursor.execute('''
+            UPDATE announcement_executions 
+            SET status = 'PROCESSING' 
+            WHERE id = ? AND status = 'PENDING'
+        ''', (job_id,))
+        if cursor.rowcount == 0:
+            continue # Job đã bị instance khác chiếm quyền chạy, bỏ qua
+        conn.commit() # Chốt lock
+        
+        # 5. Thực thi (Execution)
+        print(f"\n⏰ Phát bài: {job['job_name']} (Scheduled: {job['scheduled_time']} | Try: {job['retry_count'] + 1})")
+        
+        channels = json.loads(job["target_channels"])
+        all_success = True
+        
+        for channel in channels:
+            success = send_telegram_message(channel, job["message_text"])
+            if not success:
+                all_success = False
                 
-            # Đánh dấu phút này đã hoàn thành công việc
-            _last_posted_timestamp = current_time_signature
+        # 6. Post-Execution (Cập nhật kết quả)
+        if all_success:
+            cursor.execute("UPDATE announcement_executions SET status = 'SUCCESS' WHERE id = ?", (job_id,))
+        else:
+            new_retry_count = job["retry_count"] + 1
+            if new_retry_count > MAX_RETRIES:
+                print(f"  ❌ Hết số lần thử lại (Max {MAX_RETRIES}). Job thất bại vĩnh viễn.")
+                cursor.execute("UPDATE announcement_executions SET status = 'FAILED', retry_count = ? WHERE id = ?", (new_retry_count, job_id))
+            else:
+                backoff_mins = RETRY_BACKOFF_MINS.get(new_retry_count, 60)
+                next_retry = now + datetime.timedelta(minutes=backoff_mins)
+                next_retry_str = next_retry.strftime('%Y-%m-%d %H:%M:%S')
+                print(f"  ⏳ Lỗi gửi tin. Sẽ thử lại lần {new_retry_count} vào {next_retry_str}")
+                
+                cursor.execute('''
+                    UPDATE announcement_executions 
+                    SET status = 'PENDING', retry_count = ?, next_retry_at = ?
+                    WHERE id = ?
+                ''', (new_retry_count, next_retry_str, job_id))
+                
+        conn.commit()
+    conn.close()
 
 def run_scheduler_sync():
     print("====================================================")
