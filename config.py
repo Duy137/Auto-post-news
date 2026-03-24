@@ -179,12 +179,11 @@ class KeywordCategoryConfig(TypedDict):
 
 class KeywordCapConfig(TypedDict):
     market_moving: float
-    urgent: float
     macro_politics: float
     major_tech: float
     price_analysis: float
     business_development: float
-    security_incident: float
+    negative_event: float
 
 class ScoringWeights(TypedDict):
     base_score: float
@@ -211,15 +210,17 @@ SCORING_WEIGHTS: ScoringWeights = {
     # Từ khóa chia làm các rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {
         "market_moving": [
-            "lawsuit", "charges", "indictment", "court", "fine", "settlement", "sanction", "ban", "regulation", "regulatory", "withdrawal halt",
-            "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "token unlock", "unlock", "token burn", "burn", "supply reduction", "inflation change",
-            "delist", "delisting", "etf approval", "hard fork", "soft fork", "staking launch", "staking unlock", "buyback", "treasury purchase",
-            "investigation", "enforcement", "subpoena", "freeze funds"
+            "regulation", "regulatory", "etf approval", "spot etf", "etf rejection", "bitcoin etf",
+            "halving", "bitcoin halving", "legal tender", "cbdc", "central bank digital currency",
+            "institutional adoption", "crypto adoption", "mica", "crypto tax", "taxation", "compliance", "crackdown", "framework"
         ],
-        "urgent": ["sues", "arrest"],
-        "macro_politics": ["bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "cpi", "rate", "powell", "fomc", "interest rates",
-            "non-farm payrolls", "treasury", "white house", "election", "dollar index", "dxy", "ppi", "gdp", "feds", "regulators", "senate", "congress"],
-        "major_tech": ["mainnet", "protocol", "network", "roadmap"],
+        "macro_politics": [
+            "bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", 
+            "cpi", "rate", "powell", "fomc", "interest rates", "non-farm payrolls", "treasury", 
+            "white house", "election", "dollar index", "dxy", "ppi", "gdp", "feds", "regulators", 
+            "senate", "congress"
+        ],
+        "major_tech": ["mainnet", "protocol", "network", "roadmap", "hard fork", "soft fork"],
         "price_analysis": [
             "price", "surge", "surges", "rally", "rallies", "climb", "climbs", "jump", "jumps", "soar", "soars", "drop", "drops", "slide", "slides", "plunge", "plunges", "dips", "dip", "pump", "dumps", "dumping", "pumped", "dumped", "bullish", "bearish",
             "analyst says", "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern", "resistance", "support", "breakout", "break down",
@@ -234,37 +235,54 @@ SCORING_WEIGHTS: ScoringWeights = {
         ],
         "business_development": [
             "funding", "investment", "invest", "invests", "invested", "raises", "raise", "raising", "venture funding", "series a", "series b", "series c",
-            "acquire", "acquisition", "merger", "buyout", "partnership", "collaboration", "collaboration", "integration",
-            "launch", "launches", "launched", "mainnet launch", "testnet launch", "token launch"
+            "acquire", "acquisition", "merger", "buyout", "partnership", "collaboration", "integration",
+            "launch", "launches", "launched", "mainnet launch", "testnet launch", "token launch",
+            "buyback", "treasury purchase", "token burn", "burn", "supply reduction", "staking launch"
         ],
-        "security_incident": [
-            "hack", "hacks", "hacked", "exploit", "exploits", "exploited", "attack", "attacks", "attacked", "rug pull", "scam", "breach", "security incident", "vulnerability", "fraud", "theft", "embezzle", "probe"
+        "negative_event": [
+            # Security
+            "hack", "hacks", "hacked", "exploit", "exploits", "exploited", "attack", "attacks", "attacked", "rug pull", "scam", "breach", "security incident", "vulnerability", "fraud", "theft", "embezzle", "probe",
+            # Legal & Regulatory Actions
+            "lawsuit", "sues", "sued", "charges", "indictment", "court", "fine", "settlement", "sanction", "ban", "investigation", "enforcement", "subpoena", "freeze funds", "arrest", "arrested",
+            # Operational Failures & Bearish Token Mics
+            "withdrawal halt", "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "delist", "delisting",
+            "token unlock", "unlock", "staking unlock", "inflation change"
         ]
     },
     
     # Điểm Trần (Cap) của từng rổ để tránh lạm phát
     "keyword_caps": {
-        "market_moving": 12.0,
-        "urgent": 10.0,
-        "macro_politics": 12.0,
-        "major_tech": 8.0,
+        "market_moving": 8.0,
+        "macro_politics": 9.0,
+        "major_tech": 7.0,
         "price_analysis": -18.0,
-        "business_development": 8.0,
-        "security_incident": 12.0
+        "business_development": 10.0,
+        "negative_event": 10.0
     },
     
-    "major_tokens": ["BTC", "Bitcoin", "ETH", "Ethereum", "BNB", "SOL", "Solana", "XRP", "Ripple", "ADA", "Cardano", "DOGE", "Dogecoin", "TRX", "Tron", "DOT", "Polkadot", "LTC", "Litecoin", "SHIB", "UNI", "Uniswap", "AVAX", "Avalanche", "MATIC", "Polygon", "LINK", "Chainlink", "APT", "Aptos", "ARB", "Arbitrum", "OP", "Optimism", "SUI", "INJ", "Injective", "NEAR", "ATOM", "Cosmos", "FTM", "Fantom", "AAVE", "MKR", "OKB", "HYPE"],
+    "major_tokens": [
+        "BTC", "Bitcoin", "ETH", "Ethereum", "BNB", "SOL", "Solana", "XRP", "Ripple", "DOGE", "Dogecoin", 
+        "ADA", "Cardano", "AVAX", "Avalanche", "TRX", "Tron", "DOT", "Polkadot", "LINK", "Chainlink", 
+        "MATIC", "POL", "Polygon", "SHIB", "Shiba Inu", "TON", "Toncoin", "ICP", "Internet Computer", 
+        "BCH", "Bitcoin Cash", "Near Protocol", "LTC", "Litecoin", "UNI", "Uniswap", "APT", "Aptos", 
+        "ARB", "Arbitrum", "OP", "Optimism", "SUI", "INJ", "Injective", "ATOM", "Cosmos", "FTM", "Fantom", 
+        "AAVE", "MKR", "Maker", "OKB", "HYPE", "Hyperliquid", "PEPE", "WIF", "dogwifhat", "KAS", "Kaspa", 
+        "XLM", "Stellar", "XMR", "Monero", "RNDR", "Render", "TAO", "Bittensor", "FIL", "Filecoin", 
+        "STX", "Stacks", "IMX", "Immutable", "MNT", "Mantle", "VET", "VeChain", "FLOKI", "LDO", "Lido", 
+        "JUP", "Jupiter", "TIA", "Celestia", "SEI", "CRO", "Cronos", "HBAR", "Hedera", "WLD", "Worldcoin", 
+        "BGB", "PYTH", "GRT", "The Graph", "ENA", "Ethena", "ONDO", "THETA", "AR", "Arweave"
+    ],
     "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Gemini", "Bitstamp"],
     
     # Thực thể vĩ mô (SEC, Fed...) bổ trợ cho Token & Sàn
     "macro_entities": [
-        "SEC", "Fed", "FOMC", "Powell", "Trump", "Biden", "Harris", "Musk", "Vitalik", "BlackRock", "Fidelity", "MicroStrategy", "Saylor", 
-        "Tether", "USDT", "USDC", "Circle", "SBF", "FTX", "Celsius", "Do Kwon", "Terra", "LUNA"
+        "SEC", "Fed", "FOMC", "Powell", "Trump", "Musk", "Vitalik", "BlackRock", "Fidelity", "MicroStrategy", "Saylor", 
+        "Tether", "USDT", "USDC", "Circle"
     ],
     
     # Cấu hình Phạt cho tin không có Core Entity (Áp dụng cho rổ Security/Business/Tech)
     "non_core_penalty_multiplier": 0.4, # Giữ lại 40% điểm (Phạt 60%)
-    "penalty_exempt_categories": ["market_moving", "macro_politics", "urgent"], # Các rổ miễn trừ phạt
+    "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
     
     # [NEW] Two-Layer Speculation Filter: Tự động loại bỏ tin "thầy dùi" dự đoán giá ảo
     "SPECULATION_HARD_REJECT_PATTERN": r"(price\s+prediction|price\s+target|forecast\s+price|market\s+outlook|will\s+reach|\bscore\b.*\bprediction\b|forecast.*\d+\$)",
@@ -273,25 +291,6 @@ SCORING_WEIGHTS: ScoringWeights = {
     # [NEW] Advanced Capital Flow Detection: Phát hiện dòng tiền lớn ($M, $B) để cộng điểm
     "CAPITAL_FLOW_REGEX": r"((\$|€|£)\d+(\.\d+)?(k|m|b)?)|(\d+(\.\d+)?(k|m|b)\s*(usd|usdt|eth|btc|tokens?))|(\d+(\.\d+)?\s*(million|billion))",
     "CAPITAL_FLOW_BONUS": 4.0,
-    
-    # Compound Regex for specific tech assets (Sử dụng trong rank.py, cấu hình ở đây cho dễ quản lý)
-    "compound_tech_regexes": [
-        r"bitcoin.*(upgrade|protocol|fork|network)",
-        r"ethereum.*(upgrade|hard fork|mainnet|eip|protocol)"
-    ],
-    "compound_tech_weight": 5.0, # Điểm cộng thêm nếu khớp compound tech
-    
-    # Dấu hiệu Action Event (Trọn bộ Vĩ mô & Công nghệ)
-    "editorial_verbs": {
-        "sue": 5.0, "sues": 5.0, "accuse": 4.5, "investigate": 4.5, "liquidate": 4.5,
-        "freeze": 4.0, "halt": 4.0, "halted": 4.0, "deploy": 3.5,
-        "announce": 3.0, "approve": 4.0, "pass": 4.0, "enforce": 4.0,
-        "file": 3.5, "propose": 3.5, "launch": 3.0, "upgrade": 3.0,
-        "invest": 4.0, "buy": 3.5, "sell": 3.5, "raise": 4.0
-    },
-    
-    # Cộng thêm nếu bài nằm trong rổ chủ đề đang rầm rộ
-    "cross_source_momentum_score": 2.5,
     
     # Phạt bài viết chung chủ đề với bài xếp trên nó (Diversity Check ở Phase 4)
     # 0.4 nghĩa là phạt mất 60% tổng điểm

@@ -168,7 +168,8 @@ async def run_rss_pipeline_loop():
                     wait_time = 600 # Fallback 10p
                 else:
                     import datetime
-                    now = datetime.datetime.now()
+                    vn_tz = datetime.timezone(datetime.timedelta(hours=7)) # Đảm bảo luôn dùng giờ Việt Nam (UTC+7) trên server
+                    now = datetime.datetime.now(vn_tz)
                     # Parse times and find next
                     future_times = []
                     for t_str in schedule:
@@ -180,7 +181,7 @@ async def run_rss_pipeline_loop():
                     
                     next_run = min(future_times)
                     wait_time = (next_run - now).total_seconds()
-                    logger.info(f"📅 [RSS MODE: SCHEDULED] Next run at {next_run.strftime('%H:%M')} (Wait: {int(wait_time/60)}m)")
+                    logger.info(f"📅 [RSS MODE: SCHEDULED] Next run at {next_run.strftime('%H:%M')} VN Time (Wait: {int(wait_time/60)}m)")
             else:
                 # Interval mode
                 wait_time = max(RSS_LOOP_INTERVAL, 60)

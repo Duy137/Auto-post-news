@@ -6,15 +6,12 @@ Tài liệu này cung cấp cái nhìn chi tiết nhất về cơ chế chấm �
 
 ## 🏗️ 1. Công Thức Chấm Điểm Tổng Quát
 
-Điểm số hành trình của một bài báo từ lúc thu thập đến khi được đăng:
-
-`Total Score = (Editorial_Score) * Viral_Potential * Time_Decay * RSS_Suppression`
+`Total Score = Editorial_Score * Time_Decay * Topic_Novelty_Penalty`
 
 Trong đó:
-*   **Editorial Score**: Điểm chất lượng nội dung biên tập.
-*   **Viral Potential**: Hệ số tiềm năng lan truyền (Momentum + Shock).
-*   **Time Decay**: Hệ số thối rữa theo thời gian (Tin cũ mất điểm).
--   **RSS Suppression**: Hệ số chống trùng lặp chủ đề (Chế tài nếu vừa đăng tin tương tự).
+*   **Editorial Score**: Điểm chất lượng nội dung (Dựa trên Từ khóa, Dòng tiền và Thực thể).
+*   **Time Decay**: Hệ số hao mòn theo thời gian (Tin cũ mất điểm).
+*   **Topic Novelty Penalty**: Chế tài chống trùng lặp chủ đề (Supression Guard).
 
 ---
 
@@ -26,26 +23,25 @@ Trong đó:
 Điểm số được tính bằng cách quét các rổ từ khóa. Mỗi rổ có một **Trần điểm (Cap)** để tránh việc một bài báo có quá nhiều từ khóa cùng loại gây "lạm phát" điểm.
 
 | Rổ Keyword | Cap (Điểm) | Ý Nghĩa / Mục Tiêu |
-| :--- | :--- | :--- |
-| **Market Moving** | 12.0 | Các sự kiện lớn (ETF, Ban, Regulation, Airdrop, Lawsuit). |
-| **Urgent** | 10.0 | Hành động pháp lý mạnh (Sues, Arrest). |
-| **Macro / Politics** | 12.0 | Powell, FOMC, CPI, Interest Rates, Election. |
-| **Security Incident** | 12.0 | Hack, Exploit, Scam, Breach (Cần Core Entity để có điểm cao). |
-| **Major Tech** | 8.0 | Nâng cấp giao thức (Mainnet, Upgrade, Roadmap). |
-| **Business Dev** | 8.0 | Hoạt động kinh doanh (Funding, Launch, Partnership). |
-| **Price Analysis** | **-18.0** | **Rổ Phạt (Penalty)**: Phân tích kỹ thuật, dự đoán giá, tin đồn. |
+| **Market Moving** | 10.0 | Thay đổi vĩ mô/thị trường (ETF, Regulation, Rate). Khác với V3 cũ, các từ khóa luật pháp đã được dời đi. |
+| **Macro Politics** | 10.0 | Kinh tế biểu mô, lãi suất (Powell, FOMC, CPI, Election, SEC). |
+| **Major Tech** | 8.0 | Nâng cấp giao thức mạng lưới (Mainnet, Protocol, Roadmap). |
+| **Negative Event** | 10.0 | **[NEW MIGRATION]** Tích hợp từ Rổ Security cũ và Legal Keywords. Bao gồm: Hack, Exploit, Scam, Lawsuit, Sued, Charges, Arrest, Downtime. Cần Core Entity để thoát án phạt. |
+| **Business/Dev** | 10.0 | Dự án phát triển (Funding, Launch, Series A, Partnership). |
+| **Price Analysis** | **-18.0** | **Rổ Phạt (Penalty)**: Phân tích kỹ thuật, dự đoán giá, tin đồn, lùa gà. |
 
 ### B. Refined Entity-Based Scoring (V3.2.1)
 Hệ thống sử dụng danh sách thực thể hợp nhất để lọc nhiễu một cách thông minh:
 *   **Unified Entities**: Tự động kết hợp `major_tokens`, `major_exchanges` và `core_entities` (SEC, Fed, Powell...).
-*   **Cơ chế Phạt chọn lọc**: Hình phạt chỉ áp dụng cho các rổ "Dự án cụ thể" (`Security`, `Business`, `Tech`).
-*   **Danh sách Miễn trừ (Exempt)**: Các rổ "Tác động toàn thị trường" (`Market Moving`, `Macro`, `Urgent`) **KHÔNG** bị phạt dù có nhắc đến Core Entity hay không.
+*   **Cơ chế Phạt chọn lọc**: Hình phạt rớt điểm chỉ áp dụng cho các rổ "Hành động liên quan 1 Project cụ thể" (`Negative Event`, `Business Dev`, `Major Tech`).
+*   **Danh sách Miễn trừ (Exempt)**: Các rổ "Tác động toàn thị trường" (`Market Moving`, `Macro / Politics`) **KHÔNG** bị phạt.
+*   **Lý do cho việc dịch chuyển Legal Keywords**: Vấn đề pháp lý (kiện tụng, bắt bớ) hay lỗi server (sập mạng lưới) luôn gắn liền với dự án cụ thể. Nếu tòa án kiện một dự án vô danh -> Nhận án phạt 60%. Nếu Binance/SEC kiện nhau -> Thoát án phạt lên trang đầu.
 *   **Thông số điều chỉnh**: `non_core_penalty_multiplier` (Mặc định **0.4** - giữ lại 40% điểm).
-*   **Mục tiêu**: Đảm bảo tin tức vĩ mô quan trọng không bao giờ bị bỏ lỡ, trong khi các tin hack/funding dự án nhỏ được đưa vào hàng đợi ưu tiên thấp hơn.
+*   **Mục tiêu**: Đảm bảo tin tức vĩ mô quan trọng không bao giờ bị bỏ lỡ, trong khi dự án cỏ bị đào thải mạnh.
 
 ### C. Contextual Filter (Gỡ Hình Phạt)
 Hệ thống có khả năng phân biệt tin "Thầy dùi" (chỉ báo giá) và tin "Sự kiện" (giá chạy vì có tin thật).
-*   **Logic**: Nếu bài viết dính penalty `price_analysis` nhưng đồng thời chứa keyword trong `market_moving` hoặc `macro_politics`.
+*   **Logic**: Nếu bài viết dính penalty `price_analysis` nhưng đồng thời chứa sự kiện thật (như `negative_event` hay `market_moving`).
 *   **Kết quả**: Hình phạt của rổ `Price Analysis` sẽ bị **giảm 70%**.
 
 ### D. Token-Aware Scoring (Nhận Diện Token)
@@ -55,11 +51,9 @@ Hệ thống ưu ái các Token/Sàn giao dịch lớn trong danh sách `major_t
 
 ---
 
-## 🌪️ 3. Hệ Số Lan Truyền & Dòng Tiền (Viral & Capital)
+## 🌪️ 3. Dòng Tiền (Capital Flow)
 
-*   **Advanced Capital Flow**: Quét Regex tìm các con số tài chính lớn ($50M, 1000 BTC). Nếu khớp, cộng ngay **+4.0** điểm.
-*   **Cross-Source Momentum**: Nếu CoinTelegraph và CoinDesk cùng đăng một chủ đề trong 1-2 giờ qua, hệ số Viral sẽ tăng mạnh do thuật toán phát hiện sự đồng nhất (Jaccard Similarity).
-*   **Shock Score**: Thưởng điểm cho các từ gây sốc: *FBI, Raid, Emergency, Bankruptcy*.
+*   **Advanced Capital Flow**: Quét Regex tìm các con số tài chính lớn ($50M, 1000 BTC). Nếu khớp, cộng ngay **+4.0** điểm. Tính năng này giúp các tin gọi vốn lớn dễ dàng vươn lên top.
 
 ---
 
