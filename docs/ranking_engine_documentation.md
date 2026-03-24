@@ -27,23 +27,31 @@ Trong đó:
 
 | Rổ Keyword | Cap (Điểm) | Ý Nghĩa / Mục Tiêu |
 | :--- | :--- | :--- |
-| **Market Moving** | 12.0 | Các sự kiện lớn (ETF, Ban, Regulation, Airdrop). |
-| **Priority Event** | 8.0 | Sự kiện khẩn cấp (Hack, Lawsuit, Withdrawal Halt). |
+| **Market Moving** | 12.0 | Các sự kiện lớn (ETF, Ban, Regulation, Airdrop, Lawsuit). |
 | **Urgent** | 10.0 | Hành động pháp lý mạnh (Sues, Arrest). |
-| **Major Tech** | 10.0 | Nâng cấp giao thức (Mainnet, Upgrade, Roadmap). |
+| **Macro / Politics** | 12.0 | Powell, FOMC, CPI, Interest Rates, Election. |
+| **Security Incident** | 12.0 | Hack, Exploit, Scam, Breach (Cần Core Entity để có điểm cao). |
+| **Major Tech** | 8.0 | Nâng cấp giao thức (Mainnet, Upgrade, Roadmap). |
 | **Business Dev** | 8.0 | Hoạt động kinh doanh (Funding, Launch, Partnership). |
-| **Security Incident** | 6.0 | Sự cố an ninh mức độ thấp hoặc scam cá nhân. |
 | **Price Analysis** | **-18.0** | **Rổ Phạt (Penalty)**: Phân tích kỹ thuật, dự đoán giá, tin đồn. |
 
-### B. Contextual Filter (Gỡ Hình Phạt)
+### B. Refined Entity-Based Scoring (V3.2.1)
+Hệ thống sử dụng danh sách thực thể hợp nhất để lọc nhiễu một cách thông minh:
+*   **Unified Entities**: Tự động kết hợp `major_tokens`, `major_exchanges` và `core_entities` (SEC, Fed, Powell...).
+*   **Cơ chế Phạt chọn lọc**: Hình phạt chỉ áp dụng cho các rổ "Dự án cụ thể" (`Security`, `Business`, `Tech`).
+*   **Danh sách Miễn trừ (Exempt)**: Các rổ "Tác động toàn thị trường" (`Market Moving`, `Macro`, `Urgent`) **KHÔNG** bị phạt dù có nhắc đến Core Entity hay không.
+*   **Thông số điều chỉnh**: `non_core_penalty_multiplier` (Mặc định **0.4** - giữ lại 40% điểm).
+*   **Mục tiêu**: Đảm bảo tin tức vĩ mô quan trọng không bao giờ bị bỏ lỡ, trong khi các tin hack/funding dự án nhỏ được đưa vào hàng đợi ưu tiên thấp hơn.
+
+### C. Contextual Filter (Gỡ Hình Phạt)
 Hệ thống có khả năng phân biệt tin "Thầy dùi" (chỉ báo giá) và tin "Sự kiện" (giá chạy vì có tin thật).
-*   **Logic**: Nếu bài viết dính penalty `price_analysis` (Ví dụ: "BTC Surge") nhưng đồng thời chứa keyword trong `market_moving` hoặc `priority_event` (Ví dụ: "due to ETF approval").
+*   **Logic**: Nếu bài viết dính penalty `price_analysis` nhưng đồng thời chứa keyword trong `market_moving` hoặc `macro_politics`.
 *   **Kết quả**: Hình phạt của rổ `Price Analysis` sẽ bị **giảm 70%**.
 
-### C. Token-Aware Scoring (Nhận Diện Token)
-Hệ thống ưu ái các Token/Sàn giao dịch lớn trong danh sách `major_tokens` và `major_exchanges`.
-*   **Thưởng (+2.0)**: Nếu bài báo là tin sự kiện thực tế (Market Moving/Priority) về một Major Entity.
-*   **Phạt (-12.0)**: Nếu bài báo chỉ là phân tích giá (Price Analysis) về một Major Entity mà không có sự kiện thật.
+### D. Token-Aware Scoring (Nhận Diện Token)
+Hệ thống ưu ái các Token/Sàn giao dịch lớn trong danh sách `major_tokens` và `major_exchanges`:
+*   **Thưởng (+2.0)**: Nếu bài báo là tin sự kiện thực tế (Market Moving/Security) về một Major Entity.
+*   **Phạt (-10.0)**: Nếu bài báo chỉ là phân tích giá (Price Analysis) về một Major Entity mà không có sự kiện thật. Điều này triệt tiêu các bài tin đồn "Khi nào BTC lên 100k".
 
 ---
 
@@ -79,5 +87,6 @@ Nếu bạn thấy tin rác lọt lưới:
 3.  Nếu đó là tin rác quảng cáo dự án, hãy thêm tên dự án đó vào rổ `price_analysis` để hệ thống tự động dìm điểm.
 
 Nếu bạn thấy tin quan trọng bị bỏ sót:
-1.  Kiểm tra xem nó có chứa Keyword nào trong rổ `priority_event` không.
-2.  Nếu không, hãy thêm keyword nòng cốt của sự kiện đó vào `priority_event`.
+1.  Kiểm tra xem nó có chứa Keyword nào trong rổ `market_moving` hoặc các danh mục chính không.
+2.  Nếu không, hãy thêm keyword nòng cốt của sự kiện đó vào `market_moving`.
+3.  Nếu tin đó về một đồng coin/dự án mới, cân nhắc thêm nó vào `core_entities` để được hưởng đầy đủ điểm số.

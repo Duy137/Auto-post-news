@@ -53,41 +53,57 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
     penalty_score = 0.0
     found_keywords = []
     has_market_moving = False
-    has_priority_event = False
-    has_price_analysis = False
     has_macro_politics = False
+    has_price_analysis = False
+    has_security_incident = False
+    
+    # Check for Core Entities in Title (SENSITIVE CHECK)
+    # Kết hợp từ 3 nguồn: macro_entities, major_tokens, major_exchanges
+    core_list = (SCORING_WEIGHTS.get("macro_entities", []) + 
+                 SCORING_WEIGHTS.get("major_tokens", []) + 
+                 SCORING_WEIGHTS.get("major_exchanges", []))
+    has_core_entity = detect_entities(title, core_list)
+    
+    # Lấy cấu hình Phạt từ config
+    penalty_multiplier = SCORING_WEIGHTS.get("non_core_penalty_multiplier", 0.4)
+    exempt_categories = SCORING_WEIGHTS.get("penalty_exempt_categories", ["market_moving", "macro_politics", "urgent"])
     
     # 1. Quét các rổ từ khóa tiêu chuẩn
     for cat, base_w in SCORING_WEIGHTS["keyword_caps"].items():
         cat_score = 0.0
         for k in SCORING_WEIGHTS["keyword_categories"].get(cat, []):
-            # Dùng regex word boundary để tránh nhận diện sai (ví dụ: "price.analysis" hay "priced")
             pattern = r"\b" + re.escape(k) + r"\b"
             if re.search(pattern, text):
                 w = get_adaptive_keyword_weight(k, abs(base_w), kw_freqs)
-                # Tích lũy điểm trong rổ
                 if base_w > 0:
                     cat_score += w
                 else:
-                    cat_score -= w # Trừ điểm mềm (Penalty)
+                    cat_score -= w # Soft Penalty
                 found_keywords.append(k)
                 
                 if cat == "market_moving":
                     has_market_moving = True
-                elif cat == "priority_event":
-                    has_priority_event = True
                 elif cat == "price_analysis":
                     has_price_analysis = True
                 elif cat == "macro_politics":
                     has_macro_politics = True
+                elif cat == "security_incident":
+                    has_security_incident = True
         
-        # Áp dụng Giới hạn Trần (Cap) cho từng rổ để tránh lạm phát
+        # Áp dụng Giới hạn Trần (Cap) cho từng rổ
         if base_w > 0:
-            positive_score += min(cat_score, base_w)
+            current_bucket_score = min(cat_score, base_w)
+            
+            # [REFINED] Token-Specific Weighting: 
+            # Chỉ phạt nếu rổ KHÔNG nằm trong danh sách miễn trừ (Exempt) và KHÔNG CÓ thực thể Core
+            if cat not in exempt_categories and not has_core_entity:
+                current_bucket_score *= penalty_multiplier
+                
+            positive_score += current_bucket_score
         else:
             current_penalty = max(cat_score, base_w)
-            # Contextual Filter: If Price Analysis matches BUT Priority Event/Market Moving/Macro exists -> Reduce Penalty by 70%
-            if cat == "price_analysis" and (has_market_moving or has_priority_event or has_macro_politics):
+            # Contextual Filter: If Price Analysis matches BUT Market Moving/Macro exists -> Reduce Penalty by 70%
+            if cat == "price_analysis" and (has_market_moving or has_macro_politics):
                 current_penalty *= 0.3
             penalty_score += current_penalty
 
@@ -103,14 +119,14 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
     token_modifier = 0.0
     combined_entities = SCORING_WEIGHTS.get("major_tokens", []) + SCORING_WEIGHTS.get("major_exchanges", [])
     if detect_entities(f"{title} {summary}", combined_entities):
-        if has_price_analysis and not (has_market_moving or has_priority_event):
+        if has_price_analysis and not (has_market_moving or has_security_incident):
             token_modifier = SCORING_WEIGHTS.get("SPECULATION_SOFT_PENALTY_SCORE", -10.0)
             penalty_score += token_modifier  # Phạt cực nặng bài thầy dùi
-        elif has_market_moving or has_priority_event:
+        elif has_market_moving or has_security_incident:
             token_modifier = 2.0
             positive_score += token_modifier # Thưởng nhẹ để đôn rank bài tin tức thực sự
 
-    return positive_score, penalty_score, found_keywords, token_modifier, has_priority_event
+    return positive_score, penalty_score, found_keywords, token_modifier, has_security_incident
 
 def calc_editorial_verb_score(title: str) -> float:
     """Lấy điểm trọng số cộng dồn của các động từ hành động Vĩ mô."""
@@ -230,7 +246,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
             continue 
             
         # A. Base Impacts
-        positive_kw_score, penalty_kw_score, words_found, token_modifier, has_priority_event = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
+        positive_kw_score, penalty_kw_score, words_found, token_modifier, has_security_incident = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
         keywords_to_log.extend(words_found)
         
         verb_score = calc_editorial_verb_score(art["title"])
@@ -252,7 +268,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # Thể loại để lấy Topic Fatigue
         entity_type = "default"
         text_lower = (art["title"]+art.get("summary", "")).lower()
-        if shock_score > 0 or has_priority_event: entity_type = "hack"
+        if shock_score > 0 or has_security_incident: entity_type = "hack"
         elif "etf" in text_lower: entity_type = "etf"
         elif "sec" in text_lower: entity_type = "sec"
         
