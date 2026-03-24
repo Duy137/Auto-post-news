@@ -6,10 +6,11 @@ Tài liệu này cung cấp cái nhìn chi tiết nhất về cơ chế chấm �
 
 ## 🏗️ 1. Công Thức Chấm Điểm Tổng Quát
 
-`Total Score = Editorial_Score * Time_Decay * Topic_Novelty_Penalty`
+`Total Score = (Editorial_Score + Trend_Bonus) * Time_Decay * Topic_Novelty_Penalty`
 
 Trong đó:
 *   **Editorial Score**: Điểm chất lượng nội dung (Dựa trên Từ khóa, Dòng tiền và Thực thể).
+*   **Trend Bonus**: Điểm xu hướng lan truyền (Cộng điểm nếu nhiều báo cùng đưa tin).
 *   **Time Decay**: Hệ số hao mòn theo thời gian (Tin cũ mất điểm).
 *   **Topic Novelty Penalty**: Chế tài chống trùng lặp chủ đề (Supression Guard).
 
@@ -51,9 +52,16 @@ Hệ thống ưu ái các Token/Sàn giao dịch lớn trong danh sách `major_t
 
 ---
 
-## 🌪️ 3. Dòng Tiền (Capital Flow)
+## 🌪️ 3. Dòng Tiền & Độ Lan Truyền (Capital & Trend)
 
 *   **Advanced Capital Flow**: Quét Regex tìm các con số tài chính lớn ($50M, 1000 BTC). Nếu khớp, cộng ngay **+4.0** điểm. Tính năng này giúp các tin gọi vốn lớn dễ dàng vươn lên top.
+*   **Cluster Trend Bonus (V4.1)**: Nếu một bản tin được nhiều đầu báo cùng đưa (`cluster_size > 1`), hệ thống sẽ thưởng thêm `(cluster_size - 1) * 2.0` điểm. Tính năng siêu nhẹ này thay thế cho Jaccard phức tạp trước đó, đảm bảo các tin nóng hổi lên xu hướng dễ dàng vượt mặt tin đơn lẻ.
+
+---
+
+## 🕒 4. Hao Mòn Thời Gian (Time Decay)
+*   **Công thức**: `exp(-lambda * hours_passed)` với `lambda = 0.035`.
+*   **Ý nghĩa**: Điểm số sẽ giảm dần theo hàm mũ. Với lambda 0.035, một bài báo 20 giờ tuổi sẽ bị chia đôi số điểm gốc. Việc sử dụng hàm thời gian liên tục (`hours_passed` chính xác đến từng phút) đảm bảo **không bao giờ có 2 bài báo đồng hạng tuyệt đối** (Tie-breaker).
 
 ---
 

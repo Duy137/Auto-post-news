@@ -194,9 +194,8 @@ class ScoringWeights(TypedDict):
     penalty_exempt_categories: List[str]
     major_tokens: List[str]
     major_exchanges: List[str]
-    editorial_verbs: Dict[str, float]
-    cross_source_momentum_score: float
     time_decay_lambda_per_hour: float
+    cluster_trend_bonus: float
     topic_novelty_penalty: float
     baseline_keyword_freqs: Dict[str, float]
 
@@ -204,8 +203,11 @@ SCORING_WEIGHTS: ScoringWeights = {
     # Điểm sàn mặc định cho mọi bài báo
     "base_score": 3.0,
     
-    # Hàm mũ y=e^(-lambda*x). Lambda 0.05 nghĩa là sau 14h điểm giảm còn 1/2.
-    "time_decay_lambda_per_hour": 0.05, 
+    # Hàm mũ y=e^(-lambda*x). Lambda 0.035 nghĩa là sau 20h điểm giảm còn 1/2.
+    "time_decay_lambda_per_hour": 0.035, 
+    
+    # Điểm cộng thêm cho tính lan truyền (Trend) dựa trên số tờ báo cùng đưa 1 tin (Cluster Size)
+    "cluster_trend_bonus": 1.0,
     
     # Từ khóa chia làm các rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {

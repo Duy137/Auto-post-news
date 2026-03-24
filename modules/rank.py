@@ -189,19 +189,23 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # B. Tín nhiệm nguồn
         src_cred = SOURCE_CREDIBILITY.get(art["source_name"], 1.0)
         
-        # C. Editorial Score
-        editorial_score = (base_score + positive_kw_score + penalty_kw_score + fatigue_penalty) * src_cred
+        # [NEW] C. Cluster Trend Bonus (Điểm xu hướng báo chí cùng đưa tin)
+        cluster_size = art.get("cluster_size", 1)
+        trend_bonus = (cluster_size - 1) * SCORING_WEIGHTS.get("cluster_trend_bonus", 2.0)
+        
+        # D. Editorial Score
+        editorial_score = (base_score + positive_kw_score + penalty_kw_score + fatigue_penalty + trend_bonus) * src_cred
 
-        # D. Time Decay (Càng cũ càng giảm)
+        # E. Time Decay (Càng cũ càng giảm)
         decay_mult = calc_standard_time_decay(art.get("root_created_ts", art.get("published_ts", current_ts)), current_ts)
         
-        # E. FINAL SCORE formula (V4.0 Simplified)
+        # F. FINAL SCORE formula (V4.1 Trend-Aware)
         total_score = editorial_score * decay_mult
         
         # Enhanced breakdown_log for Rank Debugging
         breakdown_log = (
             f"\n📊 [RANK DEBUG] Article: '{art['title'][:60]}...'\n"
-            f"  [+] Base: {base_score:.1f} | Source Cred: {src_cred:.1f}\n"
+            f"  [+] Base: {base_score:.1f} | Source Cred: {src_cred:.1f} | Trend Bonus: {trend_bonus:+.1f} (Cluster: {cluster_size})\n"
             f"  [+] Kw Bonus: {positive_kw_score - capital_flow_bonus:.2f} | Capital Flow: {capital_flow_bonus:+.1f} | Token Mod: {token_modifier:+.1f}\n"
             f"  [-] Penalty: {penalty_kw_score:.2f} | Fatigue: {fatigue_penalty:.1f}\n"
             f"  [*] Mults: TimeDecay={decay_mult:.2f}\n"
@@ -229,6 +233,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
             "penalty_keyword_score": round(penalty_kw_score, 2),
             "token_modifier": token_modifier,
             "capital_flow_bonus": capital_flow_bonus,
+            "trend_bonus": trend_bonus,
             "editorial_score": round(editorial_score, 2),
             "topic_novelty_multiplier": topic_novelty_multiplier, 
             "total_score": round(total_score, 2)
@@ -237,7 +242,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         
         # Bổ sung dòng Total Score vào Breakdown Log và in ra Console
         breakdown_log += f"  => FINAL_SCORE    : {art['score']:.2f}\n"
-        if art["score"] > 8.0 or has_priority_event: # Chỉ in log chi tiết các bài khá khẩm để tránh rác console
+        if art["score"] > 8.0 or has_negative_event: # Chỉ in log chi tiết các bài khá khẩm để tránh rác console
             logger.info(breakdown_log)
         
     # Lọc bỏ các bài bị Hard Reject (-999.0) khỏi danh sách để tránh lọt vào Selector
