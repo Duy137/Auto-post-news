@@ -16,7 +16,9 @@ def reload_config():
     ORCHESTRATION_CONFIG["express_throttle_minutes"] = int(os.environ.get("EXPRESS_THROTTLE_MINUTES", "3"))
     ORCHESTRATION_CONFIG["rss_penalty_multiplier"] = float(os.environ.get("RSS_PENALTY_MULTIPLIER", "0.1"))
     ORCHESTRATION_CONFIG["express_retry_attempts"] = int(os.environ.get("EXPRESS_RETRY_ATTEMPTS", "2"))
-    ORCHESTRATION_CONFIG["express_retry_backoff_sec"] = int(os.environ.get("EXPRESS_RETRY_BACKOFF_SEC", "30"))
+    ORCHESTRATION_CONFIG["express_retry_backoff_sec"] = int(os.environ.get("express_retry_backoff_sec", "30"))
+    ORCHESTRATION_CONFIG["rss_mode"] = os.environ.get("RSS_MODE", "interval").lower()
+    ORCHESTRATION_CONFIG["rss_schedule"] = [t.strip() for t in os.environ.get("RSS_SCHEDULE", "08:00,11:00,14:00,17:00,20:00,23:00").split(",") if t.strip()]
     
     # Reload LLM Provider too
     LLM_CONFIG["active_provider"] = os.environ.get("LLM_PROVIDER", "gemini").lower()
@@ -51,7 +53,11 @@ ORCHESTRATION_CONFIG = {
     "rss_penalty_multiplier": float(os.environ.get("RSS_PENALTY_MULTIPLIER", "0.1")),
     
     "express_retry_attempts": int(os.environ.get("EXPRESS_RETRY_ATTEMPTS", "2")),
-    "express_retry_backoff_sec": int(os.environ.get("EXPRESS_RETRY_BACKOFF_SEC", "30"))
+    "express_retry_backoff_sec": int(os.environ.get("EXPRESS_RETRY_BACKOFF_SEC", "30")),
+    
+    # RSS Mechanism: 'interval' (cách 1 khoảng) hoặc 'scheduled' (theo giờ cố định)
+    "rss_mode": os.environ.get("RSS_MODE", "interval").lower(),
+    "rss_schedule": [t.strip() for t in os.environ.get("RSS_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()]
 }
 
 class RssSource(TypedDict):
@@ -66,35 +72,49 @@ RSS_SOURCES: List[RssSource] = [
         "id": "cointelegraph",
         "name": "CoinTelegraph",
         "url": "https://cointelegraph.com/rss",
-        "credibility_score": 1.15,
-        "latency_advantage_score": 1.05
+        "credibility_score": 1.25,
+        "latency_advantage_score": 1.1
     },
     {
         "id": "coindesk",
         "name": "CoinDesk",
         "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
-        "credibility_score": 1.15,
-        "latency_advantage_score": 1.1
+        "credibility_score": 1.2,
+        "latency_advantage_score": 1.15
     },
     {
         "id": "theblock",
         "name": "The Block",
         "url": "https://www.theblock.co/rss.xml",
-        "credibility_score": 1.15,
-        "latency_advantage_score": 1.1
+        "credibility_score": 1.2,
+        "latency_advantage_score": 1.15
     },
     {
         "id": "decrypt",
         "name": "Decrypt",
         "url": "https://decrypt.co/feed",
-        "credibility_score": 1.1,
+        "credibility_score": 1.15,
+        "latency_advantage_score": 1.1
+    },
+    {
+        "id": "investing_crypto",
+        "name": "Investing.com Crypto",
+        "url": "https://www.investing.com/rss/news_301.rss",
+        "credibility_score": 1.15,
+        "latency_advantage_score": 1.05
+    },
+    {
+        "id": "investing_stock",
+        "name": "Investing.com Stock",
+        "url": "https://www.investing.com/rss/news_25.rss",
+        "credibility_score": 1.15,
         "latency_advantage_score": 1.05
     },
     {
         "id": "cryptoslate",
         "name": "CryptoSlate",
         "url": "https://cryptoslate.com/feed/",
-        "credibility_score": 1.05,
+        "credibility_score": 1.00,
         "latency_advantage_score": 1.05
     },
     {
@@ -112,13 +132,6 @@ RSS_SOURCES: List[RssSource] = [
         "latency_advantage_score": 1.05
     },
     {
-        "id": "watcherguru",
-        "name": "Watcher Guru",
-        "url": "https://watcher.guru/news/feed",
-        "credibility_score": 1.05,
-        "latency_advantage_score": 1.1
-    },
-    {
         "id": "newsbtc",
         "name": "NewsBTC",
         "url": "https://www.newsbtc.com/feed/",
@@ -133,8 +146,8 @@ RSS_SOURCES: List[RssSource] = [
         "latency_advantage_score": 1.0
     },
     {
-        "id": "yahoo_finance_crypto",
-        "name": "Yahoo Finance",
+        "id": "yahoo_finance_macro",
+        "name": "Yahoo Finance News",
         "url": "https://finance.yahoo.com/news/rssindex",
         "credibility_score": 1.15,
         "latency_advantage_score": 1.0
@@ -145,6 +158,13 @@ RSS_SOURCES: List[RssSource] = [
         "url": "https://techcrunch.com/category/cryptocurrency/feed/",
         "credibility_score": 1.1,
         "latency_advantage_score": 1.0
+    },
+    {
+        "id": "cnbc_finance",
+        "name": "CNBC Finance",
+        "url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+        "credibility_score": 1.1,
+        "latency_advantage_score": 1.1
     }
 ]
 
@@ -153,6 +173,8 @@ class KeywordCategoryConfig(TypedDict):
     macro_politics: List[str]
     major_tech: List[str]
     price_analysis: List[str]
+    business_development: List[str]
+    security_incident: List[str]
 
 class KeywordCapConfig(TypedDict):
     market_moving: float
@@ -161,6 +183,8 @@ class KeywordCapConfig(TypedDict):
     major_tech: float
     price_analysis: float
     priority_event: float
+    business_development: float
+    security_incident: float
 
 class ScoringWeights(TypedDict):
     base_score: float
@@ -183,9 +207,14 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Từ khóa chia làm các rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {
-        "market_moving": ["hack", "exploit", "breach", "attack", "security incident", "vulnerability", "fraud", "scam", "rug pull", "theft", "embezzle", "investigation", "probe", "lawsuit", "charges", "indictment", "court", "fine", "settlement", "sanction", "ban", "regulation", "regulatory", "withdrawal halt", "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "funding", "investment", "raises", "raise", "venture funding", "series a", "series b", "series c", "acquire", "acquisition", "merger", "buyout", "token unlock", "unlock", "token burn", "burn", "supply reduction", "inflation change", "listing", "listed", "delist", "delisting", "etf", "etf approval", "partnership", "collaboration", "integration", "launch", "mainnet launch", "testnet launch", "hard fork", "soft fork", "upgrade", "protocol upgrade", "airdrop", "staking launch", "staking unlock", "buyback", "treasury purchase"],
+        "market_moving": [
+            "hack", "exploit", "attack", "rug pull", "investigation", "probe", "lawsuit", "charges", "indictment", "court", "fine", "settlement", "sanction", "ban", "regulation", "regulatory", "withdrawal halt",
+            "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "token unlock", "unlock", "token burn", "burn", "supply reduction", "inflation change", #"listing", "listed",
+            "delist", "delisting", "etf approval", "hard fork", "soft fork", "staking launch", "staking unlock", "buyback", "treasury purchase",
+        ],
         "urgent": ["sues", "arrest"],
-        "macro_politics": ["bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "cpi", "rate"],
+        "macro_politics": ["bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "cpi", "rate", "powell", "fomc", "interest rates",
+            "non-farm payrolls", "treasury", "white house", "election", "dollar index", "dxy", "inflation", "ppi", "gdp", "feds", "regulators", "senate", "congress"],
         "major_tech": ["mainnet", "protocol", "network", "roadmap"],
         "price_analysis": [
             "price", "surge", "surges", "rally", "rallies", "climb", "climbs", "jump", "jumps", "soar", "soars", "drop", "drops", "slide", "slides", "plunge", "plunges", "dips", "dip", "pump", "dumps", "dumping", "pumped", "dumped", "bullish", "bearish",
@@ -197,22 +226,33 @@ SCORING_WEIGHTS: ScoringWeights = {
             "double top", "double bottom",
             "head and shoulders", "inverse head and shoulders",
             "cup and handle", "ascending triangle", "descending triangle",  "on track to", "set to", "poised to", "targeting", "toward $", "could hit", "will hit", "can reach",
+            "growth", "prospects", "valuation", "test", "loses", "retiree", "individual", "consumer", "retail", "opinion", "editorial", "sentiment", "expert scam"
         ],
         "priority_event": [
             "investigation", "lawsuit", "enforcement", "subpoena",
-            "hack", "exploit", "breach", "attack",
+            "hack", "exploit", "attack",
             "halt withdrawals", "suspend trading", "freeze funds"
+        ],
+        "business_development": [
+            "funding", "investment", "raises", "raise", "venture funding", "series a", "series b", "series c",
+            "acquire", "acquisition", "merger", "buyout", "partnership", "collaboration", "integration",
+            "launch", "mainnet launch", "testnet launch"
+        ],
+        "security_incident": [
+            "scam", "breach", "security incident", "vulnerability", "fraud", "theft", "embezzle"
         ]
     },
     
     # Điểm Trần (Cap) của từng rổ để tránh lạm phát
     "keyword_caps": {
-        "market_moving": 15.0,
+        "market_moving": 12.0,
         "urgent": 10.0,
         "macro_politics": 12.0,
         "major_tech": 10.0,
         "price_analysis": -18.0,
-        "priority_event": 10.0
+        "priority_event": 8.0,
+        "business_development": 8.0,
+        "security_incident": 6.0
     },
     
     # [NEW] Two-Layer Speculation Filter
@@ -252,14 +292,14 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Tần suất gốc cấy sẵn cho Cold-Start AI (V2)
     "baseline_keyword_freqs": {
-        "bitcoin": 50.0,
-        "btc": 50.0,
-        "ethereum": 40.0,
-        "eth": 40.0,
-        "etf": 30.0,
-        "sec": 20.0,
-        "binance": 20.0,
-        "coinbase": 15.0,
+        "bitcoin": 10.0,
+        "btc": 10.0,
+        "ethereum": 10.0,
+        "eth": 10.0,
+        "etf": 10.0,
+        "sec": 10.0,
+        "binance": 10.0,
+        "coinbase": 10.0,
         "hack": 5.0,
         "scam": 5.0,
         "bankrupt": 5.0

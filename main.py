@@ -60,8 +60,10 @@ async def run_rss_pipeline_loop():
     from modules.express_fingerprint import extract_fingerprints
     
     # 3. Startup Delay for RSS Lane
-    logger.info(f"⏳ [RSS LANE] Production Boot Delay: Waiting 15s for network stability...")
-    await asyncio.sleep(15)
+    logger.info(f"⏳ [RSS LANE] Production Boot Delay: Waiting 30s for network stability...")
+    await asyncio.sleep(30)
+    
+    is_first_cycle = True
     
     init_db()
     release_processing_timeout(timeout_minutes=30)  
@@ -106,8 +108,12 @@ async def run_rss_pipeline_loop():
                         for art in selected_articles:
                             transition_state(art["id"], ArticleState.SELECTED)
                         
-                        # Phase 5: Summarize
-                        tweet_ready_articles = summarize_articles(selected_articles)
+                        # Phase 5 & 6 Skip on first cycle to avoid deploy-spam
+                        if is_first_cycle:
+                            logger.info("🛡️ [RSS LANE] STARTUP GUARD: Skipping first publication cycle to avoid deploy-spam.")
+                        else:
+                            # Phase 5: Summarize
+                            tweet_ready_articles = summarize_articles(selected_articles)
                         if tweet_ready_articles:
                             for art in tweet_ready_articles:
                                 transition_state(art["id"], ArticleState.PROCESSING)
@@ -140,6 +146,8 @@ async def run_rss_pipeline_loop():
                                     # Partial failure or total failure
                                     metrics["failed_count"] += 1
                                     transition_state(art_id, ArticleState.FAILED)
+                                    
+                is_first_cycle = False
 
         except Exception as e:
             logger.error(f"PIPELINE ERROR: {e}\n{traceback.format_exc()}")
@@ -151,9 +159,33 @@ async def run_rss_pipeline_loop():
                 perform_routine_maintenance()
             except: pass
             
-            # Polling Control: Ensure at least 60s
-            wait_time = max(RSS_LOOP_INTERVAL, 60)
-            logger.info(f"💤 [RSS LANE] Sleeping for {wait_time} seconds...")
+            # Polling Control
+            mode = ORCHESTRATION_CONFIG.get("rss_mode", "interval")
+            if mode == "scheduled":
+                # Tính toán thời gian tới khung giờ tiếp theo
+                schedule = ORCHESTRATION_CONFIG.get("rss_schedule", [])
+                if not schedule:
+                    wait_time = 600 # Fallback 10p
+                else:
+                    import datetime
+                    now = datetime.datetime.now()
+                    # Parse times and find next
+                    future_times = []
+                    for t_str in schedule:
+                        h, m = map(int, t_str.split(":"))
+                        target = now.replace(hour=h, minute=m, second=0, microsecond=0)
+                        if target <= now:
+                            target += datetime.timedelta(days=1)
+                        future_times.append(target)
+                    
+                    next_run = min(future_times)
+                    wait_time = (next_run - now).total_seconds()
+                    logger.info(f"📅 [RSS MODE: SCHEDULED] Next run at {next_run.strftime('%H:%M')} (Wait: {int(wait_time/60)}m)")
+            else:
+                # Interval mode
+                wait_time = max(RSS_LOOP_INTERVAL, 60)
+                logger.info(f"💤 [RSS MODE: INTERVAL] Sleeping for {int(wait_time/60)}m...")
+                
             await asyncio.sleep(wait_time)
 
 async def main():

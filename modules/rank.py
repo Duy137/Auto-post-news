@@ -55,6 +55,7 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
     has_market_moving = False
     has_priority_event = False
     has_price_analysis = False
+    has_macro_politics = False
     
     # 1. Quét các rổ từ khóa tiêu chuẩn
     for cat, base_w in SCORING_WEIGHTS["keyword_caps"].items():
@@ -77,14 +78,16 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
                     has_priority_event = True
                 elif cat == "price_analysis":
                     has_price_analysis = True
+                elif cat == "macro_politics":
+                    has_macro_politics = True
         
         # Áp dụng Giới hạn Trần (Cap) cho từng rổ để tránh lạm phát
         if base_w > 0:
             positive_score += min(cat_score, base_w)
         else:
             current_penalty = max(cat_score, base_w)
-            # Contextual Filter: If Price Analysis matches BUT Priority Event/Market Moving exists -> Reduce Penalty by 70%
-            if cat == "price_analysis" and (has_market_moving or has_priority_event):
+            # Contextual Filter: If Price Analysis matches BUT Priority Event/Market Moving/Macro exists -> Reduce Penalty by 70%
+            if cat == "price_analysis" and (has_market_moving or has_priority_event or has_macro_politics):
                 current_penalty *= 0.3
             penalty_score += current_penalty
 
