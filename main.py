@@ -109,6 +109,7 @@ async def run_rss_pipeline_loop():
                             transition_state(art["id"], ArticleState.SELECTED)
                         
                         # Phase 5 & 6 Skip on first cycle to avoid deploy-spam
+                        tweet_ready_articles = []
                         if is_first_cycle:
                             logger.info("🛡️ [RSS LANE] STARTUP GUARD: Skipping first publication cycle to avoid deploy-spam.")
                         else:
