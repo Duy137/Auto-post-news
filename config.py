@@ -97,13 +97,6 @@ RSS_SOURCES: List[RssSource] = [
         "latency_advantage_score": 1.1
     },
     {
-        "id": "investing_crypto",
-        "name": "Investing.com Crypto",
-        "url": "https://www.investing.com/rss/news_301.rss",
-        "credibility_score": 1.15,
-        "latency_advantage_score": 1.05
-    },
-    {
         "id": "cryptoslate",
         "name": "CryptoSlate",
         "url": "https://cryptoslate.com/feed/",
@@ -191,9 +184,11 @@ SCORING_WEIGHTS: ScoringWeights = {
     # Từ khóa chia làm các rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {
         "market_moving": [
-            "regulation", "regulatory", "etf approval", "spot etf", "etf rejection", "bitcoin etf",
-            "halving", "bitcoin halving", "legal tender", "cbdc", "central bank digital currency",
-            "institutional adoption", "crypto adoption", "mica", "crypto tax", "taxation", "compliance", "crackdown", "framework"
+            "etf approval", "spot etf approval", "etf launch", "etf inflows", "etf outflows",
+            "halving", "bitcoin halving",
+            "legal tender", "bitcoin legal tender",
+            "cbdc launch", "central bank digital currency launch",
+            "adds bitcoin to treasury", "buys bitcoin", "purchases bitcoin", "institutional inflow"
         ],
         "macro_politics": [
             "bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", 
@@ -234,8 +229,8 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Điểm Trần (Cap) của từng rổ để tránh lạm phát
     "keyword_caps": {
-        "market_moving": 8.0,
-        "macro_politics": 9.0,
+        "market_moving": 7.0,
+        "macro_politics": 8.0,
         "major_tech": 6.0,
         "price_analysis": -18.0,
         "business_development": 10.0,
@@ -265,6 +260,10 @@ SCORING_WEIGHTS: ScoringWeights = {
     # Cấu hình Phạt cho tin không có Core Entity (Áp dụng cho rổ Security/Business/Tech)
     "non_core_penalty_multiplier": 0.4, # Giữ lại 40% điểm (Phạt 60%)
     "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
+    
+    # [NEW V4.4] Phân hạng tài sản chống Spam SEO
+    "noise_tokens": ["bitcoin", "btc", "ethereum", "eth"],
+    "noise_penalty_multiplier": 0.7, # Giữ lại 70% điểm (Phạt 30%)
     
     # [NEW] Two-Layer Speculation Filter: Tự động loại bỏ tin "thầy dùi" dự đoán giá ảo
     "SPECULATION_HARD_REJECT_PATTERN": r"(?i)(price\s+prediction|price\s+target|forecast\s+price|market\s+outlook|will\s+reach|\bscore\b.*\bprediction\b|forecast.*\d+\$|\bpump and dump\b|\bponzi\b|\bshitcoin\b)",

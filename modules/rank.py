@@ -57,12 +57,20 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
     has_price_analysis = False
     has_negative_event = False
     
-    # Check for Core Entities in Title (SENSITIVE CHECK)
-    # Kết hợp từ 3 nguồn: macro_entities, major_tokens, major_exchanges
-    core_list = (SCORING_WEIGHTS.get("macro_entities", []) + 
-                 SCORING_WEIGHTS.get("major_tokens", []) + 
-                 SCORING_WEIGHTS.get("major_exchanges", []))
-    has_core_entity = detect_entities(title, core_list)
+    # [REFINED V4.4] Asset Tiering Penalty - Phân tách Token Chuẩn và Token Nhiễu
+    noise_pool = SCORING_WEIGHTS.get("noise_tokens", ["bitcoin", "btc", "ethereum", "eth"])
+    raw_major = SCORING_WEIGHTS.get("major_tokens", [])
+    standard_tokens = [t for t in raw_major if t.lower() not in [n.lower() for n in noise_pool]]
+    
+    standard_core_list = (standard_tokens + 
+                          SCORING_WEIGHTS.get("macro_entities", []) + 
+                          SCORING_WEIGHTS.get("major_exchanges", []))
+                          
+    search_text = f"{title} {summary}".lower()
+    has_standard_core = detect_entities(search_text, standard_core_list)
+    has_noise_core = detect_entities(search_text, noise_pool)
+    
+    has_core_entity = has_standard_core or has_noise_core
     
     # Lấy cấu hình Phạt từ config
     penalty_multiplier = SCORING_WEIGHTS.get("non_core_penalty_multiplier", 0.4)
@@ -94,10 +102,16 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
         if base_w > 0:
             current_bucket_score = min(cat_score, base_w)
             
-            # [REFINED] Token-Specific Weighting: 
-            # Chỉ phạt nếu rổ KHÔNG nằm trong danh sách miễn trừ (Exempt) và KHÔNG CÓ thực thể Core
-            if cat not in exempt_categories and not has_core_entity:
-                current_bucket_score *= penalty_multiplier
+            # [REFINED V4.4] Asset Tiering 
+            if cat not in exempt_categories:
+                if not has_core_entity:
+                    # Shitcoin/TradFi -> Bị phạt 60% rổ điểm
+                    current_bucket_score *= penalty_multiplier
+                elif has_noise_core and not has_standard_core:
+                    # Chỉ có mặt Ultra-Noise Tokens (Bitcoin) -> Bị phạt 30% để chống Spam SEO
+                    noise_multi = SCORING_WEIGHTS.get("noise_penalty_multiplier", 0.7)
+                    current_bucket_score *= noise_multi
+                # Nếu có standard_core (Thuần Altcoins/Exchanges/Macro) -> Giữ nguyên 100% điểm
                 
             positive_score += current_bucket_score
         else:
