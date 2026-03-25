@@ -104,13 +104,6 @@ RSS_SOURCES: List[RssSource] = [
         "latency_advantage_score": 1.05
     },
     {
-        "id": "investing_stock",
-        "name": "Investing.com Stock",
-        "url": "https://www.investing.com/rss/news_25.rss",
-        "credibility_score": 1.15,
-        "latency_advantage_score": 1.05
-    },
-    {
         "id": "cryptoslate",
         "name": "CryptoSlate",
         "url": "https://cryptoslate.com/feed/",
@@ -146,25 +139,11 @@ RSS_SOURCES: List[RssSource] = [
         "latency_advantage_score": 1.0
     },
     {
-        "id": "yahoo_finance_macro",
-        "name": "Yahoo Finance News",
-        "url": "https://finance.yahoo.com/news/rssindex",
-        "credibility_score": 1.15,
-        "latency_advantage_score": 1.0
-    },
-    {
         "id": "techcrunch_crypto",
         "name": "TechCrunch Crypto",
         "url": "https://techcrunch.com/category/cryptocurrency/feed/",
         "credibility_score": 1.1,
         "latency_advantage_score": 1.0
-    },
-    {
-        "id": "cnbc_finance",
-        "name": "CNBC Finance",
-        "url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
-        "credibility_score": 1.1,
-        "latency_advantage_score": 1.1
     }
 ]
 
@@ -233,7 +212,8 @@ SCORING_WEIGHTS: ScoringWeights = {
             "double top", "double bottom",
             "head and shoulders", "inverse head and shoulders",
             "cup and handle", "ascending triangle", "descending triangle",  "on track to", "set to", "poised to", "targeting", "toward $", "could hit", "will hit", "can reach",
-            "growth", "prospects", "valuation", "test", "loses", "retiree", "individual", "consumer", "retail", "opinion", "editorial", "sentiment", "expert scam"
+            "growth", "prospects", "valuation", "test", "loses", "retiree", "individual", "consumer", "retail", "opinion", "editorial", "sentiment", "expert scam",
+            "stuck at", "hovers", "reclaims", "targets", "to $", "at $", "predicts", "outlook", "forecast", "expert warns", "won't hold", "falls toward"
         ],
         "business_development": [
             "funding", "investment", "invest", "invests", "invested", "raises", "raise", "raising", "venture funding", "series a", "series b", "series c",
@@ -256,7 +236,7 @@ SCORING_WEIGHTS: ScoringWeights = {
     "keyword_caps": {
         "market_moving": 8.0,
         "macro_politics": 9.0,
-        "major_tech": 7.0,
+        "major_tech": 6.0,
         "price_analysis": -18.0,
         "business_development": 10.0,
         "negative_event": 10.0
@@ -274,7 +254,7 @@ SCORING_WEIGHTS: ScoringWeights = {
         "JUP", "Jupiter", "TIA", "Celestia", "SEI", "CRO", "Cronos", "HBAR", "Hedera", "WLD", "Worldcoin", 
         "BGB", "PYTH", "GRT", "The Graph", "ENA", "Ethena", "ONDO", "THETA", "AR", "Arweave"
     ],
-    "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Gemini", "Bitstamp"],
+    "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Gemini", "Bitstamp", "MEXC", "Bitget", "BitMEX", "Upbit", "BingX"],
     
     # Thực thể vĩ mô (SEC, Fed...) bổ trợ cho Token & Sàn
     "macro_entities": [
@@ -287,29 +267,41 @@ SCORING_WEIGHTS: ScoringWeights = {
     "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
     
     # [NEW] Two-Layer Speculation Filter: Tự động loại bỏ tin "thầy dùi" dự đoán giá ảo
-    "SPECULATION_HARD_REJECT_PATTERN": r"(price\s+prediction|price\s+target|forecast\s+price|market\s+outlook|will\s+reach|\bscore\b.*\bprediction\b|forecast.*\d+\$)",
+    "SPECULATION_HARD_REJECT_PATTERN": r"(?i)(price\s+prediction|price\s+target|forecast\s+price|market\s+outlook|will\s+reach|\bscore\b.*\bprediction\b|forecast.*\d+\$|\bpump and dump\b|\bponzi\b|\bshitcoin\b)",
     "SPECULATION_SOFT_PENALTY_SCORE": -12.0,
     
-    # [NEW] Advanced Capital Flow Detection: Phát hiện dòng tiền lớn ($M, $B) để cộng điểm
-    "CAPITAL_FLOW_REGEX": r"((\$|€|£)\d+(\.\d+)?(k|m|b)?)|(\d+(\.\d+)?(k|m|b)\s*(usd|usdt|eth|btc|tokens?))|(\d+(\.\d+)?\s*(million|billion))",
-    "CAPITAL_FLOW_BONUS": 4.0,
+    # [MODIFIED V4.2] Chỉ bắt tiền triệu >= 50M, hoặc tiền tỷ
+    "CAPITAL_FLOW_REGEX": r"(?i)\$?\b(?:(?:[5-9][0-9]|[1-9][0-9]{2,})\s*(?:million|m)|[0-9]+(?:\.[0-9]+)?\s*(?:billion|trillion|b|t))\b|\b[1-9][0-9]{2,}\s*(?:BTC|ETH|SOL)\b",
+    "CAPITAL_FLOW_BONUS": 2.0,
     
     # Phạt bài viết chung chủ đề với bài xếp trên nó (Diversity Check ở Phase 4)
     # 0.4 nghĩa là phạt mất 60% tổng điểm
     "topic_novelty_penalty": 0.4,
     
-    # Tần suất gốc cấy sẵn cho Cold-Start AI (V2)
+    # Tần suất gốc cấy sẵn cho Cold-Start AI (V2) - Cập nhật từ Scan Thực tế
     "baseline_keyword_freqs": {
-        "bitcoin": 10.0,
-        "btc": 10.0,
-        "ethereum": 10.0,
-        "eth": 10.0,
-        "etf": 10.0,
-        "sec": 10.0,
+        "bitcoin": 75.0,
+        "btc": 35.0,
+        "ethereum": 20.0,
+        "eth": 20.0,
+        "xrp": 30.0,
+        "sol": 15.0,
+        "solana": 10.0,
+        "etf": 20.0,
+        "trump": 15.0,
+        "coinbase": 15.0,
         "binance": 10.0,
-        "coinbase": 10.0,
+        "sec": 10.0,
+        "tether": 10.0,
+        "shiba inu": 15.0,
+        "dogecoin": 10.0,
+        "doge": 10.0,
+        "ripple": 10.0,
+        "cardano": 10.0,
         "hack": 5.0,
         "scam": 5.0,
+        "exploit": 5.0,
+        "attacks": 5.0,
         "bankrupt": 5.0
     }
 }
