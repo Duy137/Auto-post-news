@@ -40,7 +40,7 @@ warnings.filterwarnings("ignore")
 # Quy định luồng nào (RSS, EXPRESS) được đăng lên nền tảng nào.
 PLATFORM_MAPPING = {
     "EXPRESS": ["telegram"],
-    "RSS": ["telegram"]  # Thêm twitter để test Dry Run
+    "RSS": ["telegram"]  # Thêm twitter, facebook nếu cần
 }
 
 # --- CẤU HÌNH DUAL-LANE ORCHESTRATION ---
@@ -375,6 +375,7 @@ PROMPT_TEMPLATES = {
         "\n"
         "Style rules:\n"
         "- Vietnamese only. Translate 'cryptocurrency' as 'tiền mã hóa'.\n"
+        "- YOU ARE AN EXPERT VIETNAMESE JOURNALIST. Ensure PERFECT spelling, natural grammar, and native phrasing. ZERO translation artifacts.\n"
         "- Use a neutral, professional news tone.\n"
         "- Headline must be factual, short, and descriptive.\n"
         "- Do NOT use sensational words such as: 'TIN NÓNG', 'KHẨN CẤP', 'BREAKING', 'ALERT', 'CỰC NÓNG'.\n"
@@ -396,6 +397,7 @@ PROMPT_TEMPLATES = {
         "\n"
         "Writing rules:\n"
         "- Vietnamese only. Translate 'cryptocurrency' as 'tiền mã hóa'.\n"
+        "- YOU ARE AN EXPERT VIETNAMESE JOURNALIST. Ensure PERFECT spelling, natural grammar, and native phrasing. ZERO translation artifacts.\n"
         "- Use ONLY the information from the article. Do NOT invent facts.\n"
         "- Neutral journalistic tone. Event-focused.\n"
         "- Do NOT speculate about price movements.\n"
