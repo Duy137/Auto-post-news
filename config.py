@@ -458,8 +458,7 @@ TWITTER_CONFIG = {
     "access_token": os.environ.get("TWITTER_ACCESS_TOKEN", "dummy_access_token"),
     "access_secret": os.environ.get("TWITTER_ACCESS_SECRET", "dummy_access_secret"),
     
-    # Bật cờ này trong lúc dev/test để tránh gọi API thật lên Twitter
-    #"dry_run": os.environ.get("PUBLISH_DRY_RUN", "True").lower() == "true",
+    # Đặt True để test (Log only, không đăng thật). Đặt False khi sẵn sàng đăng thật.
     "dry_run": False,
     
     # Yêu cầu về độ dài

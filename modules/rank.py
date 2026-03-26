@@ -142,6 +142,13 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
     if detect_entities(search_text, SCORING_WEIGHTS.get("macro_entities", [])):
         positive_score += entity_bonuses.get("macro_entities", 1.0)
 
+    # [V4.5 FIX] Noise Token Unconditional Penalty
+    # Áp dụng hệ số phạt lên TOÀN BỘ positive_score nếu bài CHỈ CÓ noise_tokens
+    # (Không phân biệt có hay không có điểm rổ — chặn cả Entity Bonus bị thổi cao)
+    if has_noise_core and not has_standard_core:
+        noise_multi = SCORING_WEIGHTS.get("noise_penalty_multiplier", 0.5)
+        positive_score *= noise_multi
+
     return positive_score, penalty_score, found_keywords, token_modifier, has_negative_event
 
 def calc_standard_time_decay(published_ts: int, current_ts: int) -> float:

@@ -71,7 +71,12 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
     safe_impact_text = html.escape(impact_text)
 
     if platform == "twitter":
-        content = f"{headline}\n\n{summary}{impact_text}"
+        # Twitter không render HTML, cần unescape để tránh &amp; &lt; hiển thị thô
+        import html as html_module
+        clean_headline = html_module.unescape(headline)
+        clean_summary = html_module.unescape(summary)
+        clean_impact = html_module.unescape(impact_text)
+        content = f"{clean_headline}\n\n{clean_summary}{clean_impact}"
         if hashtags:
             content += f"\n\n{hashtags}"
         return truncate_tweet_safely(content, TWITTER_CONFIG["target_length"], TWITTER_CONFIG["hard_max_length"])
