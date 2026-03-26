@@ -29,8 +29,16 @@ def select_top_articles(ranked_articles: List[Article], top_n: int = 3) -> List[
     if not ranked_articles:
         return []
 
+    # Bỏ qua các bài báo dưới điểm sàn
+    min_score = SCORING_WEIGHTS.get("min_publish_score", 4.0)
+    qualified_articles = [art for art in ranked_articles if (art.get("score") or 0) >= min_score]
+    
+    if not qualified_articles:
+        logger.info(f"All {len(ranked_articles)} articles scored below minimum publish threshold ({min_score}). Skipping publishing.")
+        return []
+
     # Sort DESC theo điểm hiện có từ Phase 3 (Đề phòng list đầu vào bị lệch)
-    sorted_articles = sorted(ranked_articles, key=lambda x: x["score"] if x["score"] else 0, reverse=True)
+    sorted_articles = sorted(qualified_articles, key=lambda x: x["score"] if x["score"] else 0, reverse=True)
     
     selected: List[Article] = []
     penalty_val = SCORING_WEIGHTS["topic_novelty_penalty"]

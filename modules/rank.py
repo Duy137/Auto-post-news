@@ -123,16 +123,24 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
 
     # 2. Xóa Compound Tech Regex (Do đã thống nhất đơn giản hóa bằng keywords)
 
-    # 3. Token-Aware Scoring Module
+    # 3. Stackable Entity Bonus Module
     token_modifier = 0.0
+    
+    # Giữ lại hệ thống Phạt mềm cho bài phân tích giá (thầy dùi)
     combined_entities = SCORING_WEIGHTS.get("major_tokens", []) + SCORING_WEIGHTS.get("major_exchanges", [])
-    if detect_entities(f"{title} {summary}", combined_entities):
-        if has_price_analysis and not (has_market_moving or has_negative_event):
+    if has_price_analysis and not (has_market_moving or has_negative_event):
+        if detect_entities(search_text, combined_entities):
             token_modifier = SCORING_WEIGHTS.get("SPECULATION_SOFT_PENALTY_SCORE", -10.0)
-            penalty_score += token_modifier  # Phạt cực nặng bài thầy dùi
-        elif has_market_moving or has_negative_event:
-            token_modifier = 2.0
-            positive_score += token_modifier # Thưởng nhẹ để đôn rank bài tin tức thực sự
+            penalty_score += token_modifier  # Phạt bài thầy dùi
+
+    # Thưởng cộng dồn cho mọi thực thể xuất hiện trong bài
+    entity_bonuses = SCORING_WEIGHTS.get("entity_bonuses", {})
+    if detect_entities(search_text, SCORING_WEIGHTS.get("major_tokens", [])):
+        positive_score += entity_bonuses.get("major_tokens", 3.0)
+    if detect_entities(search_text, SCORING_WEIGHTS.get("major_exchanges", [])):
+        positive_score += entity_bonuses.get("major_exchanges", 2.0)
+    if detect_entities(search_text, SCORING_WEIGHTS.get("macro_entities", [])):
+        positive_score += entity_bonuses.get("macro_entities", 1.0)
 
     return positive_score, penalty_score, found_keywords, token_modifier, has_negative_event
 

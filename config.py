@@ -170,6 +170,9 @@ class ScoringWeights(TypedDict):
     cluster_trend_bonus: float
     topic_novelty_penalty: float
     baseline_keyword_freqs: Dict[str, float]
+    # [NEW] Cấu hình thưởng thực thể và chặn điểm rác
+    entity_bonuses: Dict[str, float]
+    min_publish_score: float
 
 SCORING_WEIGHTS: ScoringWeights = {
     # Điểm sàn mặc định cho mọi bài báo
@@ -261,9 +264,19 @@ SCORING_WEIGHTS: ScoringWeights = {
     "non_core_penalty_multiplier": 0.4, # Giữ lại 40% điểm (Phạt 60%)
     "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
     
+    # [NEW V4.5] Điểm thưởng thực thể cộng dồn độc lập
+    "entity_bonuses": {
+        "major_tokens": 3.0,
+        "major_exchanges": 2.0,
+        "macro_entities": 1.0
+    },
+    
+    # [NEW V4.5] Ngưỡng điểm sàn tối thiểu để được quyền đăng bài
+    "min_publish_score": 5.0, # Mặc định base_score + 2
+    
     # [NEW V4.4] Phân hạng tài sản chống Spam SEO
     "noise_tokens": ["bitcoin", "btc", "ethereum", "eth"],
-    "noise_penalty_multiplier": 0.7, # Giữ lại 70% điểm (Phạt 30%)
+    "noise_penalty_multiplier": 0.5, # Giữ lại 50% điểm (Phạt 50%)
     
     # [NEW] Two-Layer Speculation Filter: Tự động loại bỏ tin "thầy dùi" dự đoán giá ảo
     "SPECULATION_HARD_REJECT_PATTERN": r"(?i)(price\s+prediction|price\s+target|forecast\s+price|market\s+outlook|will\s+reach|\bscore\b.*\bprediction\b|forecast.*\d+\$|\bpump and dump\b|\bponzi\b|\bshitcoin\b)",
