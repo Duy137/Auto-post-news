@@ -163,13 +163,13 @@ class ScoringWeights(TypedDict):
     keyword_caps: KeywordCapConfig
     macro_entities: List[str]
     non_core_penalty_multiplier: float
+    contextual_penalty_multiplier: float
     penalty_exempt_categories: List[str]
     major_tokens: List[str]
     major_exchanges: List[str]
     time_decay_lambda_per_hour: float
     cluster_trend_bonus: float
     topic_novelty_penalty: float
-    baseline_keyword_freqs: Dict[str, float]
     # [NEW] Cấu hình thưởng thực thể và chặn điểm rác
     entity_bonuses: Dict[str, float]
     min_publish_score: float
@@ -262,6 +262,7 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Cấu hình Phạt cho tin không có Core Entity (Áp dụng cho rổ Security/Business/Tech)
     "non_core_penalty_multiplier": 0.4, # Giữ lại 40% điểm (Phạt 60%)
+    "contextual_penalty_multiplier": 0.5, # Giảm mức phạt của rổ giá cả xuống còn 30% (tức phạt nhẹ đi) nếu bài có đi kèm tin vĩ mô/tin thị trường
     "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
     
     # [NEW V4.5] Điểm thưởng thực thể cộng dồn độc lập
@@ -286,36 +287,7 @@ SCORING_WEIGHTS: ScoringWeights = {
     "CAPITAL_FLOW_REGEX": r"(?i)\$?\b(?:(?:[5-9][0-9]|[1-9][0-9]{2,})\s*(?:million|m)|[0-9]+(?:\.[0-9]+)?\s*(?:billion|trillion|b|t))\b|\b[1-9][0-9]{2,}\s*(?:BTC|ETH|SOL)\b",
     "CAPITAL_FLOW_BONUS": 2.0,
     
-    # Phạt bài viết chung chủ đề với bài xếp trên nó (Diversity Check ở Phase 4)
-    # 0.4 nghĩa là phạt mất 60% tổng điểm
-    "topic_novelty_penalty": 0.4,
-    
-    # Tần suất gốc cấy sẵn cho Cold-Start AI (V2) - Cập nhật từ Scan Thực tế
-    "baseline_keyword_freqs": {
-        "bitcoin": 75.0,
-        "btc": 35.0,
-        "ethereum": 20.0,
-        "eth": 20.0,
-        "xrp": 30.0,
-        "sol": 15.0,
-        "solana": 10.0,
-        "etf": 20.0,
-        "trump": 15.0,
-        "coinbase": 15.0,
-        "binance": 10.0,
-        "sec": 10.0,
-        "tether": 10.0,
-        "shiba inu": 15.0,
-        "dogecoin": 10.0,
-        "doge": 10.0,
-        "ripple": 10.0,
-        "cardano": 10.0,
-        "hack": 5.0,
-        "scam": 5.0,
-        "exploit": 5.0,
-        "attacks": 5.0,
-        "bankrupt": 5.0
-    }
+    "topic_novelty_penalty": 0.4
 }
 
 # --- CẤU HÌNH CHO PHASE 5: TÓM TẮT & TWEET ---
@@ -436,19 +408,8 @@ PROMPT_TEMPLATES = {
 }
 
 # --- CẤU HÌNH CHO PHASE 3: EVENT ABSTRACTION ---
-ADAPTIVE_FATIGUE_WINDOWS = {
-    # Tính theo giờ. Default 3 ngày.
-    "default": 72,
-    "hack": 24,
-    "exploit": 24,
-    "scam": 24,
-    "breach": 24,
-    "bankrupt": 24,
-    "etf": 168,       # 7 days for long narratives
-    "regulation": 168,
-    "sec": 168,
-    "bill": 168
-}
+# [V4.7] ADAPTIVE_FATIGUE_WINDOWS đã bị xóa do không hiệu quả và thiếu công bằng.
+
 
 # --- CẤU HÌNH CHO PHASE 6: PUBLISHER (TWITTER) ---
 TWITTER_CONFIG = {

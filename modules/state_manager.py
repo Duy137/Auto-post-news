@@ -70,6 +70,8 @@ def init_db():
         except sqlite3.OperationalError:
             pass
             
+        # [REDUNDANT V4.7] Bảng ghi log keyword phục vụ Adaptive Weight.
+        # Hiện tại cơ chế này đã tắt, có thể xóa bảng này sau này.
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS keyword_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -290,7 +292,10 @@ def release_processing_timeout(timeout_minutes: int = 30) -> int:
         return rowcount
 
 def log_keywords(keywords: List[str]):
-    """Log keywords to database."""
+    """
+    [REDUNDANT V4.7] Log keywords to database. 
+    Phục vụ Adaptive Weight (đã tắt). Có thể xóa toàn bộ logic này sau.
+    """
     if not keywords: return
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -301,7 +306,10 @@ def log_keywords(keywords: List[str]):
         conn.commit()
 
 def get_keyword_frequencies_24h() -> Dict[str, int]:
-    """Lấy tần suất các keyword trong 24h qua."""
+    """
+    [REDUNDANT V4.7] Lấy tần suất các keyword trong 24h qua.
+    Phục vụ Adaptive Weight (đã tắt).
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
@@ -313,7 +321,10 @@ def get_keyword_frequencies_24h() -> Dict[str, int]:
         return {row['keyword']: row['cnt'] for row in cursor.fetchall()}
 
 def clean_old_keyword_logs():
-    """Xóa log cũ hơn 48h để nhẹ DB."""
+    """
+    [REDUNDANT V4.7] Xóa log cũ hơn 48h. 
+    Có thể xóa function này khi xóa bảng keyword_logs.
+    """
     with get_db_connection() as conn:
         conn.execute("DELETE FROM keyword_logs WHERE created_at < datetime('now', '-48 hours')")
         conn.commit()

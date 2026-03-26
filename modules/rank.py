@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 SOURCE_CREDIBILITY = {s["name"]: s.get("credibility_score", 1.0) for s in RSS_SOURCES}
 SOURCE_LATENCY = {s["name"]: s.get("latency_advantage_score", 1.0) for s in RSS_SOURCES}
 
-from modules.state_manager import get_keyword_frequencies_24h, log_keywords, check_recent_topic
+from modules.state_manager import check_recent_topic
 from modules.express_fingerprint import extract_fingerprints
 
 def clean_text(text: str) -> str: #Chà nhám văn bản (xóa dấu phẩy, viết thường hết) để chuẩn bị cho việc dò tìm từ khóa.
@@ -35,23 +35,15 @@ def detect_entities(text: str, entity_list: List[str]) -> bool:
             return True
     return False
 
-def get_adaptive_keyword_weight(keyword: str, base_weight: float, kw_freqs: Dict[str, int]) -> float:
-    # Lấy freq thực tế trong 24h, nếu không có thì lấy baseline cấy sẵn.
-    freq = kw_freqs.get(keyword)
-    if freq is None:
-        freq = SCORING_WEIGHTS["baseline_keyword_freqs"].get(keyword, 1.0)
-    
-    # Phạt log: 1 / log10(freq + 10) 
-    penalty = 1.0 / math.log10(freq + 10)
-    return base_weight * penalty
-
-def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, int]) -> Tuple[float, float, List[str], float, bool]:
-    """Tính Keyword Score adaptive bằng Regex Boundary. Trả về (Positive_Score, Penalty_Score, List_Words, Token_Modifier, Has_Priority_Event)."""
+def calc_keyword_score(title: str, summary: str) -> Tuple[float, float, float, bool, bool]:
+    """
+    [V4.8] Tính điểm Keyword Deterministic: 
+    Trả về (Positive_Score, Penalty_Score, Token_Modifier, Has_Negative_Event, Has_Noise_Core).
+    """
     text = f"{title} {summary}".lower()
     
     positive_score = 0.0
     penalty_score = 0.0
-    found_keywords = []
     has_market_moving = False
     has_macro_politics = False
     has_price_analysis = False
@@ -77,49 +69,49 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
     exempt_categories = SCORING_WEIGHTS.get("penalty_exempt_categories", ["market_moving", "macro_politics", "urgent"])
     
     # 1. Quét các rổ từ khóa tiêu chuẩn
+    # [V4.7] Strict 1-Hit Bucket: Khớp 1 keyword là nhận trọn 100% Base Weight của rổ đo. Thực thi bằng break.
+    # [V4.6] Single-Best Bucket: Chỉ giữ lại Rổ có điểm cao nhất.
+    best_bucket_score = 0.0
+
     for cat, base_w in SCORING_WEIGHTS["keyword_caps"].items():
-        cat_score = 0.0
+        matched = False
         for k in SCORING_WEIGHTS["keyword_categories"].get(cat, []):
             pattern = r"\b" + re.escape(k) + r"\b"
             if re.search(pattern, text):
-                w = get_adaptive_keyword_weight(k, abs(base_w), kw_freqs)
-                if base_w > 0:
-                    cat_score += w
-                else:
-                    cat_score -= w # Soft Penalty
-                found_keywords.append(k)
+                matched = True
+                break  # Strict 1-Hit: Thoát vòng lặp ngay lập tức khi tìm thấy 1 keyword.
+
+        if matched:
+            if cat == "market_moving":
+                has_market_moving = True
+            elif cat == "price_analysis":
+                has_price_analysis = True
+            elif cat == "macro_politics":
+                has_macro_politics = True
+            elif cat == "negative_event":
+                has_negative_event = True
+
+            if base_w > 0:
+                current_bucket_score = float(base_w)
                 
-                if cat == "market_moving":
-                    has_market_moving = True
-                elif cat == "price_analysis":
-                    has_price_analysis = True
-                elif cat == "macro_politics":
-                    has_macro_politics = True
-                elif cat == "negative_event":
-                    has_negative_event = True
-        
-        # Áp dụng Giới hạn Trần (Cap) cho từng rổ
-        if base_w > 0:
-            current_bucket_score = min(cat_score, base_w)
-            
-            # [REFINED V4.4] Asset Tiering 
-            if cat not in exempt_categories:
-                if not has_core_entity:
-                    # Shitcoin/TradFi -> Bị phạt 60% rổ điểm
-                    current_bucket_score *= penalty_multiplier
-                elif has_noise_core and not has_standard_core:
-                    # Chỉ có mặt Ultra-Noise Tokens (Bitcoin) -> Bị phạt 30% để chống Spam SEO
-                    noise_multi = SCORING_WEIGHTS.get("noise_penalty_multiplier", 0.7)
-                    current_bucket_score *= noise_multi
-                # Nếu có standard_core (Thuần Altcoins/Exchanges/Macro) -> Giữ nguyên 100% điểm
-                
-            positive_score += current_bucket_score
-        else:
-            current_penalty = max(cat_score, base_w)
-            # Contextual Filter: If Price Analysis matches BUT Market Moving/Macro exists -> Reduce Penalty by 70%
-            if cat == "price_analysis" and (has_market_moving or has_macro_politics):
-                current_penalty *= 0.3
-            penalty_score += current_penalty
+                # [REFINED V4.8] Asset Tiering
+                if cat not in exempt_categories:
+                    if not has_core_entity:
+                        # Shitcoin/TradFi -> Bị phạt 60% rổ điểm
+                        current_bucket_score *= penalty_multiplier
+                    # Noise Penalty được chuyển ra ngoài để chia toàn bộ điểm bài báo
+
+                # [V4.6] Chỉ giữ rổ có điểm cao nhất
+                best_bucket_score = max(best_bucket_score, current_bucket_score)
+            else:
+                current_penalty = float(base_w) # base_w là số âm cho rổ phạt
+                # Contextual Filter: If Price Analysis matches BUT Market Moving/Macro exists -> Reduce Penalty by 70%
+                if cat == "price_analysis" and (has_market_moving or has_macro_politics):
+                    current_penalty *= SCORING_WEIGHTS.get("contextual_penalty_multiplier", 0.3)
+                penalty_score += current_penalty
+
+    # Cộng điểm từ rổ tốt nhất vào positive_score
+    positive_score += best_bucket_score
 
     # 2. Xóa Compound Tech Regex (Do đã thống nhất đơn giản hóa bằng keywords)
 
@@ -133,23 +125,18 @@ def calc_adaptive_keyword_score(title: str, summary: str, kw_freqs: Dict[str, in
             token_modifier = SCORING_WEIGHTS.get("SPECULATION_SOFT_PENALTY_SCORE", -10.0)
             penalty_score += token_modifier  # Phạt bài thầy dùi
 
-    # Thưởng cộng dồn cho mọi thực thể xuất hiện trong bài
+    # [V4.6] Single-Best Entity Bonus: Chỉ lấy điểm entity nhóm CAO NHẤT
     entity_bonuses = SCORING_WEIGHTS.get("entity_bonuses", {})
+    entity_bonus_candidates = []
     if detect_entities(search_text, SCORING_WEIGHTS.get("major_tokens", [])):
-        positive_score += entity_bonuses.get("major_tokens", 3.0)
+        entity_bonus_candidates.append(entity_bonuses.get("major_tokens", 3.0))
     if detect_entities(search_text, SCORING_WEIGHTS.get("major_exchanges", [])):
-        positive_score += entity_bonuses.get("major_exchanges", 2.0)
+        entity_bonus_candidates.append(entity_bonuses.get("major_exchanges", 2.0))
     if detect_entities(search_text, SCORING_WEIGHTS.get("macro_entities", [])):
-        positive_score += entity_bonuses.get("macro_entities", 1.0)
+        entity_bonus_candidates.append(entity_bonuses.get("macro_entities", 1.0))
+    positive_score += max(entity_bonus_candidates) if entity_bonus_candidates else 0.0
 
-    # [V4.5 FIX] Noise Token Unconditional Penalty
-    # Áp dụng hệ số phạt lên TOÀN BỘ positive_score nếu bài CHỈ CÓ noise_tokens
-    # (Không phân biệt có hay không có điểm rổ — chặn cả Entity Bonus bị thổi cao)
-    if has_noise_core and not has_standard_core:
-        noise_multi = SCORING_WEIGHTS.get("noise_penalty_multiplier", 0.5)
-        positive_score *= noise_multi
-
-    return positive_score, penalty_score, found_keywords, token_modifier, has_negative_event
+    return positive_score, penalty_score, token_modifier, has_negative_event, has_noise_core
 
 def calc_standard_time_decay(published_ts: int, current_ts: int) -> float:
     """Hàm Exponential Time Decay cơ bản."""
@@ -174,46 +161,28 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         
     logger.info(f"Scoring {len(articles)} articles...")
     
-    kw_freqs = get_keyword_frequencies_24h()
-    keywords_to_log = []
+    # V4.7: Adaptive Weight và Frequency Tracking đã bị loại bỏ hoàn toàn.
     # 1. Base Score Configuration
     base_score = SCORING_WEIGHTS["base_score"]
     
-    from config import ADAPTIVE_FATIGUE_WINDOWS
-    
+        
     # 2. Xếp hạng từng bài
     for art in articles:
         text_lower = (art["title"] + " " + art.get("summary", "")).lower()
         
-        # [MODIFIED] Two-Layer Speculation Filter: Hard Reject
-        spec_hard_pattern = SCORING_WEIGHTS.get("SPECULATION_HARD_REJECT_PATTERN", r"price\s+prediction")
-        speculation_match = re.search(spec_hard_pattern, text_lower)
-        if speculation_match:
-            logger.warning(f"🛑 [FILTERED] Article '{art['id']}': Hard dropped due to Speculation Pattern Detected: '{speculation_match.group(0)}'")
-            art["score"] = -999.0
-            art["score_detail"] = {"error": "Speculation Hard Reject"}
-            continue 
+        # [V4.6] Hard Reject đã được bỏ. Lọc tự nhiên qua price_analysis penalty + min_publish_score.
             
         # A. Base Impacts
-        positive_kw_score, penalty_kw_score, words_found, token_modifier, has_negative_event = calc_adaptive_keyword_score(art["title"], art.get("summary", ""), kw_freqs)
-        keywords_to_log.extend(words_found)
+        positive_kw_score, penalty_kw_score, token_modifier, has_negative_event, has_noise_core = calc_keyword_score(art["title"], art.get("summary", ""))
 
         # [NEW] Capital Flow Bonus (Tier 2)
         capital_flow_bonus = 0.0
         cf_pattern = SCORING_WEIGHTS.get("CAPITAL_FLOW_REGEX")
         if cf_pattern and re.search(cf_pattern, text_lower):
-            capital_flow_bonus = SCORING_WEIGHTS.get("CAPITAL_FLOW_BONUS", 4.0)
+            capital_flow_bonus = SCORING_WEIGHTS.get("CAPITAL_FLOW_BONUS", 2.0)
             positive_kw_score += capital_flow_bonus
         
-        # Thể loại để lấy Topic Fatigue
-        entity_type = "default"
-        if has_negative_event: entity_type = "hack"
-        elif "etf" in text_lower: entity_type = "etf"
-        elif "sec" in text_lower: entity_type = "sec"
-        
-        window = ADAPTIVE_FATIGUE_WINDOWS.get(entity_type, 72)
-        root_age_hours = (current_ts - art.get("root_created_ts", art.get("published_ts", current_ts))) / 3600.0
-        fatigue_penalty = -0.5 if root_age_hours > window else 0.0
+        # Thể loại để lấy Topic Fatigue đã bị loại bỏ ở bản V4.7 do tính thiếu công bằng.
         
         # B. Tín nhiệm nguồn
         src_cred = SOURCE_CREDIBILITY.get(art["source_name"], 1.0)
@@ -222,8 +191,16 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         cluster_size = art.get("cluster_size", 1)
         trend_bonus = (cluster_size - 1) * SCORING_WEIGHTS.get("cluster_trend_bonus", 2.0)
         
-        # D. Editorial Score
-        editorial_score = (base_score + positive_kw_score + penalty_kw_score + fatigue_penalty + trend_bonus) * src_cred
+        # [V4.8] Absolute Noise Penalty
+        # Nhân chia thẳng tay toàn bộ điểm dương (Base + Rổ + Entity + Capital) nếu có Noise Token
+        base_positive = base_score + positive_kw_score
+        noise_penalty_applied = 1.0
+        if has_noise_core:
+            noise_penalty_applied = SCORING_WEIGHTS.get("noise_penalty_multiplier", 0.5)
+            base_positive *= noise_penalty_applied
+
+        # D. Editorial Score (Trend Bonus cộng SAU KHI đã chia Noise)
+        editorial_score = (base_positive + penalty_kw_score + trend_bonus) * src_cred
 
         # E. Time Decay (Càng cũ càng giảm)
         decay_mult = calc_standard_time_decay(art.get("root_created_ts", art.get("published_ts", current_ts)), current_ts)
@@ -236,9 +213,8 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
             f"\n📊 [RANK DEBUG] Article: '{art['title'][:60]}...'\n"
             f"  [+] Base: {base_score:.1f} | Source Cred: {src_cred:.1f} | Trend Bonus: {trend_bonus:+.1f} (Cluster: {cluster_size})\n"
             f"  [+] Kw Bonus: {positive_kw_score - capital_flow_bonus:.2f} | Capital Flow: {capital_flow_bonus:+.1f} | Token Mod: {token_modifier:+.1f}\n"
-            f"  [-] Penalty: {penalty_kw_score:.2f} | Fatigue: {fatigue_penalty:.1f}\n"
-            f"  [*] Mults: TimeDecay={decay_mult:.2f}\n"
-            f"  [*] Keywords Found: {list(set(words_found))}\n"
+            f"  [-] Penalty: {penalty_kw_score:.2f}\n"
+            f"  [*] Mults: Noise={noise_penalty_applied}x | TimeDecay={decay_mult:.2f}\n"
         )
         
         # Phase 7: RSS Cooldown Suppression Guard
@@ -277,9 +253,7 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
     # Lọc bỏ các bài bị Hard Reject (-999.0) khỏi danh sách để tránh lọt vào Selector
     articles = [a for a in articles if a.get("score", 0) > -500.0]
         
-    # Log keywords for future weighting
-    if keywords_to_log:
-        log_keywords(list(set(keywords_to_log)))
+    # [V4.7] Keyword logging has been removed
         
     # Sort DESC output (Tiện cho việc nhìn log)
     articles.sort(key=lambda x: x["score"], reverse=True)
