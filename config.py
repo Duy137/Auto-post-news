@@ -48,7 +48,7 @@ ORCHESTRATION_CONFIG = {
     "rss_enabled": os.environ.get("RSS_ENABLED", "True").lower() == "true",
     "express_enabled": os.environ.get("EXPRESS_ENABLED", "True").lower() == "true",
     
-    "fingerprint_window_minutes": int(os.environ.get("FINGERPRINT_WINDOW_MINUTES", "60")),
+    "fingerprint_window_minutes": int(os.environ.get("FINGERPRINT_WINDOW_MINUTES", "10")),
     "express_throttle_minutes": int(os.environ.get("EXPRESS_THROTTLE_MINUTES", "3")),
     "rss_penalty_multiplier": float(os.environ.get("RSS_PENALTY_MULTIPLIER", "0.1")),
     
@@ -342,11 +342,11 @@ LLM_CONFIG = {
     },
     
     "lane_timeouts": {
-        "RSS": 15,       # Seconds: Standard timeout for RSS pool
-        "EXPRESS": 8     # Seconds: Strict timeout to prevent blocking listener
+        "RSS": 30,       # Seconds: Generous timeout for Gemma 27B under server load
+        "EXPRESS": 30    # Seconds: Relaxed since Express throttle is min 5 mins
     },
     
-    "max_tokens": 150,
+    "max_tokens": 500,
     "temperature": 0.3, # Giữ temperature thấp để tránh AI "ảo giác" (hallucination)
     "max_retries": 2  # Hard limit per pipeline
 }
