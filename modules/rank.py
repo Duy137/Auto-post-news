@@ -143,22 +143,19 @@ def calc_keyword_score(title: str, summary: str) -> Tuple[float, float, float, b
 
 def calc_standard_time_decay(published_ts: int, current_ts: int) -> float:
     """Hàm Exponential Time Decay cơ bản."""
-    # [BUG FIX] Nếu published_ts là 0 hoặc quá cũ (trước năm 2020), coi như bài vừa đăng xong
-    MIN_VALID_TS = 1577836800  # 2020-01-01 (Unix timestamp)
+    # Nếu published_ts là 0 hoặc trước năm 2020 → fallback về current_ts (decay=1.0)
+    MIN_VALID_TS = 1577836800  # 2020-01-01
     if not published_ts or published_ts < MIN_VALID_TS:
-        published_ts = current_ts  # Giả định mới đăng, không phạt gì
+        published_ts = current_ts
     hours_passed = (current_ts - published_ts) / 3600.0
     if hours_passed < 0:
         hours_passed = 0
-    # [BUG FIX V2] Cap tối đa 48h: Tránh trường hợp bài
-    # có timestamp hợp lệ (sau 2020) nhưng rất cũ (ví dụ: Bitfinex 2022 bị republish)
-    # khiến hours_passed = 26,000h → decay → 0.00 → bài quan trọng bị hủy toàn bộ điểm.
-    MAX_ARTICLE_AGE_HOURS = 48  # Bài nào cũng chỉ kéo xuống tới 48h là cùng
-    hours_passed = min(hours_passed, MAX_ARTICLE_AGE_HOURS)
-        
+    # [V2 REVERTED] Bỏ cap 48h — nó khiến tất cả bài có TimeDecay=0.19 do root_created_ts cũ.
+    # Thay bằng decay floor 0.12 — bài cực kỳ cũ (Bitfinex 2022) vẫn giữ 12% điểm, không về 0.
     lmbda = SCORING_WEIGHTS["time_decay_lambda_per_hour"]
-    multiplier = math.exp(-lmbda * hours_passed)
-    return round(multiplier, 4)
+    raw_multiplier = math.exp(-lmbda * hours_passed)
+    DECAY_FLOOR = 0.12
+    return round(max(raw_multiplier, DECAY_FLOOR), 4)
 
 def rank_articles(articles: List[Article], current_ts: int = None) -> List[Article]: #Nhạc trưởng của Khâu 3. Nó gom tất cả các hàm trên lại, gõ máy tính theo đúng công thức: Total = Editorial_Score * TimeDecay * TopicNovelty.
     """
@@ -215,11 +212,12 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         editorial_score = (base_positive + penalty_kw_score + trend_bonus) * src_cred
 
         # E. Time Decay (Càng cũ càng giảm)
-        # [V4.8 FIX] Ưu tiên root_created_ts nếu hợp lệ, fallback về published_ts, rồi về current_ts nếu cả hai đều không có
-        MIN_VALID_TS = 1577836800
-        _root_ts = art.get("root_created_ts") or 0
-        _pub_ts  = art.get("published_ts") or 0
-        effective_ts = _root_ts if _root_ts >= MIN_VALID_TS else (_pub_ts if _pub_ts >= MIN_VALID_TS else current_ts)
+        # [V4.8 FINAL] Chỉ dùng published_ts (ngày RSS đăng bài).
+        # root_created_ts KHÔNG tham gia decay — nó phụ trách narrative/clustering, không phải freshness.
+        # Fallback: nếu published_ts không có/không hợp lệ → dùng current_ts (decay=1.0, không phạt).
+        MIN_VALID_TS = 1577836800  # 2020-01-01
+        _pub_ts = art.get("published_ts") or 0
+        effective_ts = _pub_ts if _pub_ts >= MIN_VALID_TS else current_ts
         decay_mult = calc_standard_time_decay(effective_ts, current_ts)
         
         # F. FINAL SCORE formula (V4.1 Trend-Aware)
