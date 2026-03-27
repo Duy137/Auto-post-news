@@ -140,6 +140,10 @@ def calc_keyword_score(title: str, summary: str) -> Tuple[float, float, float, b
 
 def calc_standard_time_decay(published_ts: int, current_ts: int) -> float:
     """Hàm Exponential Time Decay cơ bản."""
+    # [BUG FIX] Nếu published_ts là 0 hoặc quá cũ (trước năm 2020), coi như bài vừa đăng xong
+    MIN_VALID_TS = 1577836800  # 2020-01-01 (Unix timestamp)
+    if not published_ts or published_ts < MIN_VALID_TS:
+        published_ts = current_ts  # Giả định mới đăng, không phạt gì
     hours_passed = (current_ts - published_ts) / 3600.0
     if hours_passed < 0:
         hours_passed = 0
@@ -203,7 +207,12 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         editorial_score = (base_positive + penalty_kw_score + trend_bonus) * src_cred
 
         # E. Time Decay (Càng cũ càng giảm)
-        decay_mult = calc_standard_time_decay(art.get("root_created_ts", art.get("published_ts", current_ts)), current_ts)
+        # [V4.8 FIX] Ưu tiên root_created_ts nếu hợp lệ, fallback về published_ts, rồi về current_ts nếu cả hai đều không có
+        MIN_VALID_TS = 1577836800
+        _root_ts = art.get("root_created_ts") or 0
+        _pub_ts  = art.get("published_ts") or 0
+        effective_ts = _root_ts if _root_ts >= MIN_VALID_TS else (_pub_ts if _pub_ts >= MIN_VALID_TS else current_ts)
+        decay_mult = calc_standard_time_decay(effective_ts, current_ts)
         
         # F. FINAL SCORE formula (V4.1 Trend-Aware)
         total_score = editorial_score * decay_mult
