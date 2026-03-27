@@ -8,11 +8,13 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models import Article
 from modules.state_manager import get_recent_articles_for_dedup, create_event_root, log_article_event_root
+from modules.express_fingerprint import extract_fingerprints
+from config import DEDUP_CONFIG
 
 logger = logging.getLogger(__name__)
 
-# Config cho deduplicator
-SIMILARITY_THRESHOLD = 0.45  # Khoảng 45% trùng lặp từ khóa chính là đủ để coi là duplicate vì ta đã bỏ stopwords
+# Đọc từ config — có thể tune mà không cần sửa code
+SIMILARITY_THRESHOLD = DEDUP_CONFIG["similarity_threshold"]  # Mặc định: 0.38
 
 import uuid
 from abc import ABC, abstractmethod
@@ -22,6 +24,7 @@ class EventSimilarityInterface(ABC):
     def calculate_similarity(self, article_a: Dict[str, Any], article_b: Dict[str, Any]) -> float:
         pass
 
+# [GIỮ LẠI ĐỂ THAM KHẢO] JaccardSimilarity thuần — không dùng trong pipeline chính nữa
 class JaccardSimilarity(EventSimilarityInterface):
     def calculate_similarity(self, article_a: Dict[str, Any], article_b: Dict[str, Any]) -> float:
         tokens_a = get_article_tokens(article_a.get('title', ''), article_a.get('link', ''))
@@ -82,9 +85,79 @@ def calculate_jaccard_similarity(set_a: Set[str], set_b: Set[str]) -> float: #Th
     
     return intersection / union if union > 0 else 0.0
 
+def normalize_text_phrases(text: str) -> str:
+    """Bước 1: Thay thế phrase nhiều chữ trong raw text TRƯỚC KHI tokenize.
+    Dùng regex word boundary để tránh match sai substring.
+    Ví dụ: "regulatory" sẽ KHÔNG bị thay thành "sec" dù chứa "regulator".
+    """
+    text_lower = text.lower()
+    for phrase, replacement in DEDUP_CONFIG["normalization_phrases"].items():
+        pattern = r"\b" + re.escape(phrase) + r"\b"
+        text_lower = re.sub(pattern, replacement, text_lower)
+    return text_lower
+
+def normalize_tokens(tokens: Set[str]) -> Set[str]:
+    """Bước 2: Normalize từng token đơn SAU KHI tokenize (BTC→bitcoin, ETH→ethereum...)."""
+    norm_map = DEDUP_CONFIG["normalization_tokens"]
+    return {norm_map.get(t, t) for t in tokens}
+
+class EnhancedSimilarity(EventSimilarityInterface):
+    """
+    [V2.0] Hybrid similarity = (entity_weight × entity_sim) + (token_weight × jaccard).
+    - Entity similarity: đo độ trùng tên người/tổ chức/token giữa 2 bài (signal mạnh)
+    - Token Jaccard: đo độ trùng từ phổ thông (signal phụ)
+    Weights và threshold có thể tune trong DEDUP_CONFIG (config.py).
+    """
+    def calculate_similarity(self, article_a: Dict[str, Any], article_b: Dict[str, Any]) -> float:
+        title_a = article_a.get("title", "")
+        title_b = article_b.get("title", "")
+
+        # Bước 1: Token Jaccard (có normalize phrase + token)
+        norm_a = normalize_text_phrases(title_a)
+        norm_b = normalize_text_phrases(title_b)
+        slug_a = get_slug_from_url(article_a.get("link", ""))
+        slug_b = get_slug_from_url(article_b.get("link", ""))
+        tokens_a = normalize_tokens(get_words(norm_a).union(get_words(slug_a)))
+        tokens_b = normalize_tokens(get_words(norm_b).union(get_words(slug_b)))
+        jaccard = calculate_jaccard_similarity(tokens_a, tokens_b)
+
+        # Bước 2: Entity similarity (dùng express_fingerprint đã có sẵn)
+        raw_ents_a = set(extract_fingerprints(title_a))
+        raw_ents_b = set(extract_fingerprints(title_b))
+        # Trim fingerprint nhiều chữ xuống còn 2 chữ đầu để tránh CamelCase over-matching.
+        # Ví dụ: "david sacks wraps up crypto" -> "david sacks" để khớp với bài kia.
+        def trim_fp(fps):
+            return {' '.join(fp.split()[:2]) for fp in fps}
+        # Áp dụng normalization_tokens (btc→bitcoin) lên entity strings
+        norm_map = DEDUP_CONFIG["normalization_tokens"]
+        ents_a = {norm_map.get(e, e) for e in trim_fp(raw_ents_a)}
+        ents_b = {norm_map.get(e, e) for e in trim_fp(raw_ents_b)}
+
+        intersection = ents_a & ents_b
+        # Dùng min thay vì max: nếu bài B có nhiều "noise entity" hơn,
+        # entity core match vẫn được đếm đầy đủ (không bị pha loãng bởi noise)
+        min_ents = min(len(ents_a), len(ents_b), 1) if (ents_a and ents_b) else 1
+        entity_sim = len(intersection) / min_ents
+        entity_sim = min(entity_sim, 1.0)  # clamp về [0, 1]
+
+
+        # Bước 3: Weighted blend — bounded [0, 1]
+        e_w = DEDUP_CONFIG["entity_weight"]
+        t_w = DEDUP_CONFIG["token_weight"]
+        score = e_w * entity_sim + t_w * jaccard
+
+        logger.debug(
+            f"[DEDUP SIM] score={score:.2f} | entity={entity_sim:.2f} | jaccard={jaccard:.2f} | "
+            f"title_A='{title_a[:60]}' | title_B='{title_b[:60]}' | "
+            f"ents_A={ents_a} | ents_B={ents_b}"
+        )
+
+        return score
+
+
 def deduplicate_articles(articles: List[Article]) -> List[Article]:
     """
-    Main Phase 2 Pipeline function:
+    Main Phase 2 Pipeline function.
     Chuyển thành Event-Level Clustering. Gom nhóm bài cùng sự kiện và chọn Lead Article.
     Nối ghép Narrative Continuity bằng event_root_id.
     """
@@ -93,7 +166,8 @@ def deduplicate_articles(articles: List[Article]) -> List[Article]:
     # Kéo lịch sử từ SQLite (articles table) thay vì file JSON mồ côi
     recent_articles = get_recent_articles_for_dedup(hours=120)
     
-    similarity_engine = JaccardSimilarity()
+    # [V2.0] Dùng EnhancedSimilarity thay JaccardSimilarity thuần
+    similarity_engine = EnhancedSimilarity()
     
     unique_articles: List[Article] = []
     

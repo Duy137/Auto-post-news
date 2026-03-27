@@ -467,5 +467,37 @@ EXPRESS_CONFIG = {
 # --- CẤU HÌNH RSS LOOP THỜI GIAN CHỜ ---
 RSS_LOOP_INTERVAL = 240 * 60 # 15 minutes by default
 
+
 # Thư mục chứa Data
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+# --- CẤU HÌNH DEDUPLICATION ENGINE ---
+DEDUP_CONFIG = {
+    # Trọng số tính similarity (entity + token, tổng = 1.0)
+    # entity_weight cao hơn vì tên người/tổ chức mang nghĩa quan trọng hơn từ phổ thông
+    "entity_weight": 0.6,
+    "token_weight": 0.4,
+
+    # Ngưỡng để 2 bài bị coi là cùng sự kiện (gom cluster hoặc bị loại)
+    # Thấp hơn 0.45 cũ nhờ entity_weight đã nâng cường sức mạnh matching
+    "similarity_threshold": 0.38,
+
+    # Normalize phrase nhiều chữ -> entity chuẩn (áp dụng TRƯỚC khi tokenize)
+    "normalization_phrases": {
+        "us regulator": "sec",
+        "u.s. regulator": "sec",
+        "us securities": "sec",
+        "federal reserve": "fed",
+        "united states": "usa",
+    },
+
+    # Normalize token đơn -> token chuẩn (áp dụng SAU khi tokenize)
+    "normalization_tokens": {
+        "btc": "bitcoin",
+        "eth": "ethereum",
+        "sol": "solana",
+        "xrp": "ripple",
+        "bnb": "binance",
+    },
+}
+

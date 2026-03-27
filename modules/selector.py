@@ -71,25 +71,15 @@ def select_top_articles(ranked_articles: List[Article], top_n: int = 3) -> List[
                 old_score = candidate["score"]
                 
                 candidate["score_detail"]["topic_novelty_multiplier"] = penalty_val
-                # Recalculate Total Score bằng cách lấy Total Impact * Multipliers
-                total_impact = (
-                    candidate["score_detail"]["base_score"] +
-                    candidate["score_detail"]["keyword_cap_score"] +
-                    candidate["score_detail"]["editorial_verb_score"] +
-                    candidate["score_detail"]["cross_source_momentum_score"]
-                )
-                
-                new_score = (
-                    total_impact * 
-                    candidate["score_detail"]["source_multiplier"] * 
-                    candidate["score_detail"]["time_decay_multiplier"] * 
-                    penalty_val
-                )
+                # [FIX V4.8] Dùng trực tiếp candidate["score"] * penalty_val thay vì recalculate từ components.
+                # Các field cũ (keyword_cap_score, editorial_verb_score...) đã không còn tồn tại từ V4.7.
+                # candidate["score"] = editorial_score × time_decay × topic_novelty — đã bao gồm mọi multiplier.
+                new_score = old_score * penalty_val
                 
                 candidate["score_detail"]["total_score"] = round(new_score, 2)
                 candidate["score"] = candidate["score_detail"]["total_score"]
                 
-                logger.debug(f" -> Điểm rớt từ {old_score} xuống {candidate['score']}")
+                logger.debug(f" -> Điểm rớt từ {old_score:.2f} xuống {candidate['score']:.2f} (penalty_val={penalty_val})")
                 
             # Đẩy ngược lại candidate vào pool và resort lại (Re-rank)
             # Rất có thể sau khi bị phạt, nó sẽ rớt thẳng xuống đáy, nhường slot cho bài Top 3 khác môn phái len lên Top 2
