@@ -79,12 +79,12 @@ def extract_fingerprints(text: str) -> List[str]:
     # Sắp xếp theo alphabet để generate fingerprint chuỗi (Signature) có tính deterministic
     sorted_fingerprints = sorted(list(fingerprints))
     
-    # Log the result
+    # Log ở DEBUG level — tránh rác console khi chạy production
     signature_str = " | ".join(sorted_fingerprints)
     if sorted_fingerprints:
-         logger.info(f"🧬 [FINGERPRINT EXTRACTED]: {signature_str}")
+         logger.debug(f"🧬 [FINGERPRINT EXTRACTED]: {signature_str}")
     else:
-         logger.info(f"🧬 [FINGERPRINT EXTRACTED]: (No strong entities found)")
+         logger.debug(f"🧬 [FINGERPRINT EXTRACTED]: (No strong entities found)")
          
     return sorted_fingerprints
 
