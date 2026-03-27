@@ -39,8 +39,11 @@ def calc_keyword_score(title: str, summary: str) -> Tuple[float, float, float, b
     """
     [V4.8] Tính điểm Keyword Deterministic: 
     Trả về (Positive_Score, Penalty_Score, Token_Modifier, Has_Negative_Event, Has_Noise_Core).
+    [V4.8 FIX] Chỉ scan TITLE — summary bị loại khỏi scan keyword/entity.
+    Lý do: summary do phóng viên tóm tắt, thường dùng từ mạnh (launch, partner...)
+    khiến bài PR/hội nghị vô danh leo lên đầu oan.
     """
-    text = f"{title} {summary}".lower()
+    text = title.lower()  # [FIX] Title-only
     
     positive_score = 0.0
     penalty_score = 0.0
@@ -58,7 +61,7 @@ def calc_keyword_score(title: str, summary: str) -> Tuple[float, float, float, b
                           SCORING_WEIGHTS.get("macro_entities", []) + 
                           SCORING_WEIGHTS.get("major_exchanges", []))
                           
-    search_text = f"{title} {summary}".lower()
+    search_text = title.lower()  # [FIX] Title-only — tránh entity giả từ summary
     has_standard_core = detect_entities(search_text, standard_core_list)
     has_noise_core = detect_entities(search_text, noise_pool)
     
@@ -147,6 +150,11 @@ def calc_standard_time_decay(published_ts: int, current_ts: int) -> float:
     hours_passed = (current_ts - published_ts) / 3600.0
     if hours_passed < 0:
         hours_passed = 0
+    # [BUG FIX V2] Cap tối đa 48h: Tránh trường hợp bài
+    # có timestamp hợp lệ (sau 2020) nhưng rất cũ (ví dụ: Bitfinex 2022 bị republish)
+    # khiến hours_passed = 26,000h → decay → 0.00 → bài quan trọng bị hủy toàn bộ điểm.
+    MAX_ARTICLE_AGE_HOURS = 48  # Bài nào cũng chỉ kéo xuống tới 48h là cùng
+    hours_passed = min(hours_passed, MAX_ARTICLE_AGE_HOURS)
         
     lmbda = SCORING_WEIGHTS["time_decay_lambda_per_hour"]
     multiplier = math.exp(-lmbda * hours_passed)
@@ -256,8 +264,8 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         
         # Bổ sung dòng Total Score vào Breakdown Log và in ra Console
         breakdown_log += f"  => FINAL_SCORE    : {art['score']:.2f}\n"
-        if art["score"] > 8.0 or has_negative_event: # Chỉ in log chi tiết các bài khá khẩm để tránh rác console
-            logger.info(breakdown_log)
+        # In log cho tất cả bài để debug (không chỉ bài cao điểm)
+        logger.info(breakdown_log)
         
     # Lọc bỏ các bài bị Hard Reject (-999.0) khỏi danh sách để tránh lọt vào Selector
     articles = [a for a in articles if a.get("score", 0) > -500.0]
