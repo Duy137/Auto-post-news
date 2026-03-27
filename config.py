@@ -232,9 +232,9 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Điểm Trần (Cap) của từng rổ để tránh lạm phát
     "keyword_caps": {
-        "market_moving": 7.0,
-        "macro_politics": 8.0,
-        "major_tech": 6.0,
+        "market_moving": 4.0,
+        "macro_politics": 5.0,
+        "major_tech": 3.0,
         "price_analysis": -18.0,
         "business_development": 10.0,
         "negative_event": 10.0
@@ -256,12 +256,12 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Thực thể vĩ mô (SEC, Fed...) bổ trợ cho Token & Sàn
     "macro_entities": [
-        "SEC", "Fed", "FOMC", "Powell", "Trump", "Musk", "Vitalik", "BlackRock", "Fidelity", "MicroStrategy", "Saylor", 
+        "FOMC", "Powell", "Trump", "Musk", "Vitalik", "BlackRock", "Fidelity", "MicroStrategy", "Saylor", 
         "Tether", "USDT", "USDC", "Circle"
     ],
     
     # Cấu hình Phạt cho tin không có Core Entity (Áp dụng cho rổ Security/Business/Tech)
-    "non_core_penalty_multiplier": 0.4, # Giữ lại 40% điểm (Phạt 60%)
+    "non_core_penalty_multiplier": 0.3, # Giữ lại 30% điểm (Phạt 70%)
     "contextual_penalty_multiplier": 0.5, # Giảm mức phạt của rổ giá cả xuống còn 30% (tức phạt nhẹ đi) nếu bài có đi kèm tin vĩ mô/tin thị trường
     "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
     
