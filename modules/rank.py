@@ -262,8 +262,13 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         
         # Bổ sung dòng Total Score vào Breakdown Log và in ra Console
         breakdown_log += f"  => FINAL_SCORE    : {art['score']:.2f}\n"
-        # In log cho tất cả bài để debug (không chỉ bài cao điểm)
-        logger.info(breakdown_log)
+        # Chỉ log INFO cho bài đủ điều kiện đăng (score >= min_publish_score) hoặc negative_event
+        # Bài thấp điểm (bài cũ, rác, TechCrunch Disrupt...) hạ xuống DEBUG để không ngập log
+        min_log_score = SCORING_WEIGHTS.get("min_publish_score", 5.0)
+        if art["score"] >= min_log_score or has_negative_event:
+            logger.info(breakdown_log)
+        else:
+            logger.debug(breakdown_log)
         
     # Lọc bỏ các bài bị Hard Reject (-999.0) khỏi danh sách để tránh lọt vào Selector
     articles = [a for a in articles if a.get("score", 0) > -500.0]
