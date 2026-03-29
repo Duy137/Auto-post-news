@@ -134,10 +134,11 @@ class EnhancedSimilarity(EventSimilarityInterface):
         ents_b = {norm_map.get(e, e) for e in trim_fp(raw_ents_b)}
 
         intersection = ents_a & ents_b
-        # Dùng min thay vì max: nếu bài B có nhiều "noise entity" hơn,
-        # entity core match vẫn được đếm đầy đủ (không bị pha loãng bởi noise)
-        min_ents = min(len(ents_a), len(ents_b), 1) if (ents_a and ents_b) else 1
-        entity_sim = len(intersection) / min_ents
+        # [FIX] Dùng max thay vì min: tránh trường hợp bài chỉ có 1 entity chung (bitcoin)
+        # nhưng entity_sim = 1.0 vì min(3,1)=1 → 1/1=1.0 → gom nhầm 37 bài vào 1 cluster.
+        # Với max: 1/max(3,1) = 0.33 → đúng: chỉ 1/3 entities trùng.
+        max_ents = max(len(ents_a), len(ents_b), 1)
+        entity_sim = len(intersection) / max_ents
         entity_sim = min(entity_sim, 1.0)  # clamp về [0, 1]
 
 

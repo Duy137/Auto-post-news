@@ -187,8 +187,8 @@ SCORING_WEIGHTS: ScoringWeights = {
     # Từ khóa chia làm các rổ. Bài tính Max-cap của từng rổ cộng lại.
     "keyword_categories": {
         "market_moving": [
-            "etf approval", "spot etf approval", "etf launch", "etf inflows", "etf outflows",
-            "halving", "bitcoin halving",
+            "etf approval", "spot etf approval", "etf launch",
+            "bitcoin halving",
             "legal tender", "bitcoin legal tender",
             "cbdc launch", "central bank digital currency launch",
             "adds bitcoin to treasury", "buys bitcoin", "purchases bitcoin", "institutional inflow"

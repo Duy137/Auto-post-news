@@ -108,9 +108,6 @@ def calc_keyword_score(title: str, summary: str) -> Tuple[float, float, float, b
                 best_bucket_score = max(best_bucket_score, current_bucket_score)
             else:
                 current_penalty = float(base_w) # base_w là số âm cho rổ phạt
-                # Contextual Filter: If Price Analysis matches BUT Market Moving/Macro exists -> Reduce Penalty by 70%
-                if cat == "price_analysis" and (has_market_moving or has_macro_politics):
-                    current_penalty *= SCORING_WEIGHTS.get("contextual_penalty_multiplier", 0.3)
                 penalty_score += current_penalty
 
     # Cộng điểm từ rổ tốt nhất vào positive_score
@@ -197,8 +194,10 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         src_cred = SOURCE_CREDIBILITY.get(art["source_name"], 1.0)
         
         # [NEW] C. Cluster Trend Bonus (Điểm xu hướng báo chí cùng đưa tin)
-        cluster_size = art.get("cluster_size", 1)
-        trend_bonus = (cluster_size - 1) * SCORING_WEIGHTS.get("cluster_trend_bonus", 2.0)
+        # [FIX] Cap cluster_size tối đa 5 — tránh cluster_size=37 gây trend bonus +36
+        MAX_CLUSTER_SIZE = 5
+        cluster_size = min(art.get("cluster_size", 1), MAX_CLUSTER_SIZE)
+        trend_bonus = (cluster_size - 1) * SCORING_WEIGHTS.get("cluster_trend_bonus", 1.0)
         
         # [V4.8] Absolute Noise Penalty
         # Nhân chia thẳng tay toàn bộ điểm dương (Base + Rổ + Entity + Capital) nếu có Noise Token
