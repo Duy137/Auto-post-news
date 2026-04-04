@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 SOURCE_CREDIBILITY = {s["name"]: s.get("credibility_score", 1.0) for s in RSS_SOURCES}
 SOURCE_LATENCY = {s["name"]: s.get("latency_advantage_score", 1.0) for s in RSS_SOURCES}
 
-from modules.state_manager import check_recent_topic
+from modules.state_manager import check_recent_topic, get_posted_titles_24h
 from modules.express_fingerprint import extract_fingerprints
 
 def clean_text(text: str) -> str: #Chà nhám văn bản (xóa dấu phẩy, viết thường hết) để chuẩn bị cho việc dò tìm từ khóa.
@@ -166,12 +166,27 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         current_ts = int(time.time())
         
     logger.info(f"Scoring {len(articles)} articles...")
-    
-    # V4.7: Adaptive Weight và Frequency Tracking đã bị loại bỏ hoàn toàn.
     # 1. Base Score Configuration
     base_score = SCORING_WEIGHTS["base_score"]
     
-        
+    # [V4.9] Entity Fatigue: đếm entity đã POSTED trong 24h
+    # Nếu XRP đã xuất hiện 3 bài → bài XRP tiếp theo bị phạt nặng
+    posted_titles = get_posted_titles_24h()
+    entity_post_count: Dict[str, int] = {}
+    all_entity_lists = (
+        SCORING_WEIGHTS.get("major_tokens", []) +
+        SCORING_WEIGHTS.get("major_exchanges", []) +
+        SCORING_WEIGHTS.get("macro_entities", [])
+    )
+    for ptitle in posted_titles:
+        ptitle_lower = ptitle.lower()
+        for ent in all_entity_lists:
+            if re.search(r'\b' + re.escape(ent.lower()) + r'\b', ptitle_lower):
+                ent_key = ent.lower()
+                entity_post_count[ent_key] = entity_post_count.get(ent_key, 0) + 1
+    if entity_post_count:
+        logger.info(f"📊 [ENTITY FATIGUE] Posted entities 24h: {dict(sorted(entity_post_count.items(), key=lambda x: -x[1])[:10])}")
+
     # 2. Xếp hạng từng bài
     for art in articles:
         text_lower = (art["title"] + " " + art.get("summary", "")).lower()
@@ -221,14 +236,34 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         
         # F. FINAL SCORE formula (V4.1 Trend-Aware)
         total_score = editorial_score * decay_mult
+
+        # [V4.9] Entity Fatigue Penalty
+        # Nếu entity chính của bài đã xuất hiện nhiều trong 24h POSTED → phạt
+        # Giảm tuyến tính: lần 1=1.0, lần 2=0.8, lần 3=0.6, lần 4=0.4, lần 5=0.2, lần 6+=0.0
+        art_title_lower = art["title"].lower()
+        entity_fatigue_mult = 1.0
+        fatigue_entity = None
+        for ent in all_entity_lists:
+            ent_lower = ent.lower()
+            if re.search(r'\b' + re.escape(ent_lower) + r'\b', art_title_lower):
+                count = entity_post_count.get(ent_lower, 0)
+                if count >= 1:
+                    mult = max(1.0 - count * 0.2, 0.0)
+                    if mult < entity_fatigue_mult:
+                        entity_fatigue_mult = mult
+                        fatigue_entity = ent_lower
         
+        if entity_fatigue_mult < 1.0:
+            total_score *= entity_fatigue_mult
+            logger.info(f"😴 [ENTITY FATIGUE] '{art['title'][:50]}' — entity '{fatigue_entity}' posted {entity_post_count.get(fatigue_entity,0)}x → ×{entity_fatigue_mult}")
+
         # Enhanced breakdown_log for Rank Debugging
         breakdown_log = (
             f"\n📊 [RANK DEBUG] Article: '{art['title'][:60]}...'\n"
             f"  [+] Base: {base_score:.1f} | Source Cred: {src_cred:.1f} | Trend Bonus: {trend_bonus:+.1f} (Cluster: {cluster_size})\n"
             f"  [+] Kw Bonus: {positive_kw_score - capital_flow_bonus:.2f} | Capital Flow: {capital_flow_bonus:+.1f} | Token Mod: {token_modifier:+.1f}\n"
             f"  [-] Penalty: {penalty_kw_score:.2f}\n"
-            f"  [*] Mults: Noise={noise_penalty_applied}x | TimeDecay={decay_mult:.2f}\n"
+            f"  [*] Mults: Noise={noise_penalty_applied}x | TimeDecay={decay_mult:.2f} | EntityFatigue={entity_fatigue_mult}x\n"
         )
         
         # Phase 7: RSS Cooldown Suppression Guard

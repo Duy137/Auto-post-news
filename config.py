@@ -202,16 +202,18 @@ SCORING_WEIGHTS: ScoringWeights = {
         "major_tech": ["mainnet", "protocol", "network", "roadmap", "hard fork", "soft fork"],
         "price_analysis": [
             "price", "surge", "surges", "rally", "rallies", "climb", "climbs", "jump", "jumps", "soar", "soars", "drop", "drops", "slide", "slides", "plunge", "plunges", "dips", "dip", "pump", "dumps", "dumping", "pumped", "dumped", "bullish", "bearish",
-            "analyst says", "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern", "resistance", "support", "breakout", "break down",
+            "analyst says", "analyst shares", "analyst predicts", "analyst warns", "analyst expects",
+            "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern", "resistance", "support", "breakout", "break down",
             "trendline", "moving average", "EMA", "SMA", "Take It To", "bottom", "top", "on track to", "Crypto Today", "The Daily", "hits", "hit", "bears", "bear", "bulls", "bull",
             "RSI", "MACD", "overbought", "oversold", "correction", "market rout", "market crash", "Crypto news:",
             "fibonacci", "retracement",
             "consolidation", "accumulation", "distribution",
-            "double top", "double bottom",
+            "double top", "double bottom", "triangle",
             "head and shoulders", "inverse head and shoulders",
-            "cup and handle", "ascending triangle", "descending triangle",  "on track to", "set to", "poised to", "targeting", "toward $", "could hit", "will hit", "can reach",
+            "cup and handle", "on track to", "set to", "poised to", "targeting", "toward $", "could hit", "will hit", "can reach",
             "growth", "prospects", "valuation", "test", "loses", "retiree", "individual", "consumer", "retail", "opinion", "editorial", "sentiment", "expert scam",
-            "stuck at", "hovers", "reclaims", "targets", "to $", "at $", "predicts", "outlook", "forecast", "expert warns", "won't hold", "falls toward"
+            "stuck at", "hovers", "reclaims", "targets", "to $", "at $", "predicts", "outlook", "forecast", "expert warns", "won't hold", "falls toward",
+            "what to expect", "happens next", "what happens", "brewing", "shorting", "trapped"
         ],
         "business_development": [
             "funding", "investment", "invest", "invests", "invested", "raises", "raise", "raising", "venture funding", "series a", "series b", "series c",
@@ -236,8 +238,8 @@ SCORING_WEIGHTS: ScoringWeights = {
         "macro_politics": 5.0,
         "major_tech": 3.0,
         "price_analysis": -18.0,
-        "business_development": 10.0,
-        "negative_event": 10.0
+        "business_development": 7.0,
+        "negative_event": 7.0
     },
     
     "major_tokens": [

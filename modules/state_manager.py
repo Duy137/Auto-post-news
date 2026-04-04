@@ -354,6 +354,18 @@ def get_recent_articles_for_dedup(hours: int = 120) -> List[Dict[str, Any]]:
         ''')
         return [dict(row) for row in cursor.fetchall()]
 
+def get_posted_titles_24h() -> List[str]:
+    """Lấy danh sách title của các bài đã POSTED trong 24h qua. Dùng cho Entity Fatigue."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT title FROM articles
+            WHERE state = 'POSTED'
+            AND updated_at >= datetime('now', '-24 hours')
+            AND title IS NOT NULL
+        ''')
+        return [row[0] for row in cursor.fetchall()]
+
 # ==========================================
 # EXPRESS LANE: HARD DEDUPLICATION (PHASE 2)
 # ==========================================

@@ -116,6 +116,26 @@ Có những người chơi có lợi thế, nhưng đó có phải là bạn?
 ⭐️ Admin sẽ không bao giờ nhắn tin riêng trước cho bạn.
 ⭐️ Nguồn lực của team là có hạn. Nếu bạn muốn được hỗ trợ tốt hơn, hãy ủng hộ team để được tham gia nhóm Premium 👉 nhắn tin cho @zayne120 hoặc<a href="https://t.me/CryptoVN101/1852"> làm theo hướng dẫn</a>."""
 
+MESSAGE_4 = """🚨 NHẮC NHỞ NHẸ CUỐI TUẦN – DUY TRÌ QUYỀN LỢI
+
+Chào anh em 👋
+Team gửi một nhắc nhở nhỏ để mọi người nắm rõ cách group vận hành 👇
+
+💡 Group hoạt động theo tinh thần win-win:
+🫡 Team luôn cố gắng nâng cấp sản phẩm, giúp anh em có lợi thế trên thị trường — đó là cam kết và tâm huyết của team.
+🤝 Đồng thời, sự tham gia giao dịch của anh em là yếu tố giúp team duy trì và phát triển giá trị lâu dài.
+
+📊 Điều kiện duy trì Premium Hub:
+1️⃣ Volume tối thiểu 3000 USD / tháng trên các sàn đối tác của CryptoVN 101
+2️⃣ Nếu không phát sinh giao dịch trong 3 tháng liên tiếp, team sẽ tạm thời remove khỏi group
+3️⃣ Việc rà soát sẽ được thực hiện định kỳ mỗi tháng
+
+🙏 Mong ae hiểu và góp sức cùng team gây dựng một cộng đồng đầu tư tử tế, chất lượng.
+
+💬 Nếu cần hỗ trợ hoặc góp ý, anh em cứ phản hồi hoặc inbox admin — team luôn sẵn sàng lắng nghe.
+
+🔥  Cảm ơn anh em đã luôn đồng hành và ủng hộ CryptoVN 101!"""
+
 # ---------------------------------------------------------
 # 3. CẤU HÌNH LỊCH ĐĂNG BÀI CHÍNH XÁC (SCHEDULES)
 # ---------------------------------------------------------
@@ -124,12 +144,14 @@ Có những người chơi có lợi thế, nhưng đó có phải là bạn?
 # Hour: Định dạng 24h (Ví dụ: 8 cho 8h sáng, 20 cho 8h tối)
 # Minute: Phút (0 -> 59)
 # Channels: Danh sách ID Kênh (Ví dụ "-10012345678" hoặc lấy DEFAULT_CHAT_ID từ .env)
+# Image (optional): Đường dẫn file ảnh local hoặc URL. Nếu có, tin nhắn sẽ gửi kèm ảnh.
 
 # MẶC ĐỊNH SẼ ĐĂNG VÀO CHAT_ID BẠN ĐÃ CẤU HÌNH TRONG .ENV
 # Có thể chèn cụ thể nhiều nhóm vào `.env`, ví dụ: TARGET_CHANNELS_TIN_1=-100123,-100456
 TARGET_CHANNELS_TIN_1 = get_channels_from_env("TARGET_CHANNELS_TIN_1")
 TARGET_CHANNELS_TIN_2 = get_channels_from_env("TARGET_CHANNELS_TIN_2")
 TARGET_CHANNELS_TIN_3 = get_channels_from_env("TARGET_CHANNELS_TIN_3")
+TARGET_CHANNELS_TIN_4 = get_channels_from_env("TARGET_CHANNELS_TIN_4")
 
 SCHEDULES = [
     # Cấu Hình Tin Nhắn 1 (Thứ Bảy lúc 09:00)
@@ -140,6 +162,10 @@ SCHEDULES = [
     
     # Cấu Hình Tin Nhắn 3 (Chủ Nhật lúc 09:00)
     {"name": "Tin nhắn 3", "day": 6, "hour": 9, "minute": 00, "message": MESSAGE_3, "channels": TARGET_CHANNELS_TIN_3},
+    
+    # Cấu Hình Tin Nhắn 4 (Chủ Nhật lúc 10:00) — Nhắc nhở cuối tuần, có thể kèm ảnh
+    # Để thêm ảnh: thêm key "image": "assets/reminder.png" hoặc URL ảnh
+    {"name": "Tin nhắn 4", "day": 6, "hour": 9, "minute": 00, "message": MESSAGE_4, "channels": TARGET_CHANNELS_TIN_4, "image": "photos/photos/nhac-nho-giao-dich-cryptovn101.jpg"},
 ]
 
 # ---------------------------------------------------------
@@ -163,6 +189,7 @@ def init_db():
             status TEXT DEFAULT 'PENDING',
             retry_count INTEGER DEFAULT 0,
             next_retry_at DATETIME,
+            image_path TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -170,6 +197,11 @@ def init_db():
         CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_schedule 
         ON announcement_executions(job_name, scheduled_time)
     ''')
+    # Migration: thêm cột image_path nếu DB cũ chưa có
+    try:
+        cursor.execute("ALTER TABLE announcement_executions ADD COLUMN image_path TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Cột đã tồn tại
     conn.commit()
     conn.close()
 
@@ -195,15 +227,16 @@ def materialize_schedules():
                     continue
                     
                 channels_json = json.dumps(job["channels"])
+                image_path = job.get("image", "")  # Optional: đường dẫn ảnh
                 # Định dạng ISO cục bộ (VN_TZ) để so sánh chuỗi
                 scheduled_str = job_time.strftime('%Y-%m-%d %H:%M:%S')
                 
                 try:
                     cursor.execute('''
                         INSERT OR IGNORE INTO announcement_executions 
-                        (job_name, message_text, target_channels, scheduled_time, status)
-                        VALUES (?, ?, ?, ?, 'PENDING')
-                    ''', (job["name"], job["message"], channels_json, scheduled_str))
+                        (job_name, message_text, target_channels, scheduled_time, status, image_path)
+                        VALUES (?, ?, ?, ?, 'PENDING', ?)
+                    ''', (job["name"], job["message"], channels_json, scheduled_str, image_path))
                     if cursor.rowcount > 0:
                         inserted_count += 1
                 except sqlite3.Error as e:
@@ -219,7 +252,7 @@ def materialize_schedules():
 # ---------------------------------------------------------
 
 def send_telegram_message(chat_id: str, text: str):
-    """Gửi tin nhắn qua Telegram API."""
+    """Gửi tin nhắn text qua Telegram API."""
     if not chat_id or chat_id == "-100xxxxx":
         print("⚠️ CẢNH BÁO: CHAT_ID chưa được định nghĩa chính xác. Bỏ qua.")
         return False
@@ -228,8 +261,8 @@ def send_telegram_message(chat_id: str, text: str):
     payload = {
         "chat_id": str(chat_id).strip(),
         "text": text,
-        "parse_mode": "HTML", # Bật HTML để chữ bọc Link
-        "disable_web_page_preview": True # Tự động tắt link preview lớn để giữ gọn tin
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
     }
     
     try:
@@ -242,6 +275,54 @@ def send_telegram_message(chat_id: str, text: str):
             return False
     except Exception as e:
         print(f"  ⚠️ Exception khi gửi: {str(e)}")
+        return False
+
+def send_telegram_photo(chat_id: str, image_path: str, caption: str = ""):
+    """Gửi ảnh kèm caption qua Telegram API.
+    image_path có thể là:
+      - Đường dẫn file local (ví dụ: 'assets/reminder.png')
+      - URL ảnh trên internet (ví dụ: 'https://example.com/image.jpg')
+    """
+    if not chat_id or chat_id == "-100xxxxx":
+        print("⚠️ CẢNH BÁO: CHAT_ID chưa được định nghĩa chính xác. Bỏ qua.")
+        return False
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    
+    try:
+        # Nếu là URL → gửi qua field 'photo' trong JSON
+        if image_path.startswith("http://") or image_path.startswith("https://"):
+            payload = {
+                "chat_id": str(chat_id).strip(),
+                "photo": image_path,
+                "caption": caption,
+                "parse_mode": "HTML"
+            }
+            response = requests.post(url, json=payload, timeout=30)
+        else:
+            # File local → gửi qua multipart upload
+            abs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), image_path)
+            if not os.path.exists(abs_path):
+                print(f"  ❌ Không tìm thấy file ảnh: {abs_path}")
+                return False
+            
+            with open(abs_path, "rb") as photo_file:
+                files = {"photo": photo_file}
+                data = {
+                    "chat_id": str(chat_id).strip(),
+                    "caption": caption,
+                    "parse_mode": "HTML"
+                }
+                response = requests.post(url, data=data, files=files, timeout=30)
+        
+        if response.status_code == 200:
+            print(f"  ✅ Đã gửi ảnh + caption thành công vào channel {chat_id}")
+            return True
+        else:
+            print(f"  ❌ Lỗi Telegram sendPhoto (Code {response.status_code}): {response.text}")
+            return False
+    except Exception as e:
+        print(f"  ⚠️ Exception khi gửi ảnh: {str(e)}")
         return False
 
 MAX_RETRIES = 3
@@ -314,8 +395,14 @@ def check_and_post():
         channels = json.loads(job["target_channels"])
         all_success = True
         
+        image = job["image_path"] if job["image_path"] else ""
+        
         for channel in channels:
-            success = send_telegram_message(channel, job["message_text"])
+            if image:
+                # Gửi ảnh kèm caption (text là caption của ảnh)
+                success = send_telegram_photo(channel, image, job["message_text"])
+            else:
+                success = send_telegram_message(channel, job["message_text"])
             if not success:
                 all_success = False
                 

@@ -20,7 +20,7 @@ import uuid
 from abc import ABC, abstractmethod
 
 class EventSimilarityInterface(ABC):
-    @abstractmethod
+    @abstractmethod 
     def calculate_similarity(self, article_a: Dict[str, Any], article_b: Dict[str, Any]) -> float:
         pass
 
