@@ -165,7 +165,7 @@ SCHEDULES = [
     
     # Cấu Hình Tin Nhắn 4 (Chủ Nhật lúc 10:00) — Nhắc nhở cuối tuần, có thể kèm ảnh
     # Để thêm ảnh: thêm key "image": "assets/reminder.png" hoặc URL ảnh
-    {"name": "Tin nhắn 4", "day": 6, "hour": 9, "minute": 00, "message": MESSAGE_4, "channels": TARGET_CHANNELS_TIN_4, "image": "photos/photos/nhac-nho-giao-dich-cryptovn101.jpg"},
+    {"name": "Tin nhắn 4", "day": 6, "hour": 9, "minute": 00, "message": MESSAGE_4, "channels": TARGET_CHANNELS_TIN_4, "image": "photos/nhac-nho-giao-dich-cryptovn101.jpg"},
 ]
 
 # ---------------------------------------------------------
