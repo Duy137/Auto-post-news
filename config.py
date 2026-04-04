@@ -206,7 +206,7 @@ SCORING_WEIGHTS: ScoringWeights = {
             "experts believe", "could surge", "might rally", "market sentiment", "investors expect", "data suggests", "technical setup", "chart pattern", "resistance", "support", "breakout", "break down",
             "trendline", "moving average", "EMA", "SMA", "Take It To", "bottom", "top", "on track to", "Crypto Today", "The Daily", "hits", "hit", "bears", "bear", "bulls", "bull",
             "RSI", "MACD", "overbought", "oversold", "correction", "market rout", "market crash", "Crypto news:",
-            "fibonacci", "retracement",
+            "fibonacci", "retracement", "fibonacci retracement", "bollinger",
             "consolidation", "accumulation", "distribution",
             "double top", "double bottom", "triangle",
             "head and shoulders", "inverse head and shoulders",
@@ -406,6 +406,18 @@ PROMPT_TEMPLATES = {
         "\n"
         "🔷 <bullet point 4 if needed>"
         "|||HASHTAGS: <1-3 tags>"
+    ),
+    "POLISH": (
+        "Bạn là biên tập viên tiếng Việt chuyên nghiệp. Nhiệm vụ DUY NHẤT: kiểm tra chính tả và dịch headline.\n"
+        "\n"
+        "QUY TẮC BẮT BUỘC:\n"
+        "1. Nếu dòng HEADLINE (dòng đầu tiên, viết HOA) còn bằng tiếng Anh → Dịch sang tiếng Việt, viết HOA toàn bộ. Giữ nguyên tên riêng (công ty, dự án, token, tên người).\n"
+        "2. Sửa mọi lỗi chính tả và lỗi dấu tiếng Việt trong toàn bài.\n"
+        "3. TUYỆT ĐỐI KHÔNG thay đổi nội dung, số liệu, tên riêng, hoặc cấu trúc bài.\n"
+        "4. TUYỆT ĐỐI KHÔNG thêm, bớt, hoặc diễn đạt lại bất kỳ câu nào.\n"
+        "5. Giữ nguyên toàn bộ format gốc: emoji, bullet points 🔷, xuống dòng, hashtags.\n"
+        "6. Nếu bài viết đã hoàn hảo, trả về nguyên văn không thay đổi gì.\n"
+        "7. CHỈ trả về bài viết đã sửa. KHÔNG thêm lời giải thích hay bình luận.\n"
     )
 }
 

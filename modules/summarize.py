@@ -186,7 +186,7 @@ def _call_openai(system_prompt: str, user_prompt: str, api_key: str, model_name:
         return "FATAL_ERROR"
     return None
 
-def _call_gemini(system_prompt: str, user_prompt: str, api_key: str, model_name: str, timeout: int) -> Optional[str]:
+def _call_gemini(system_prompt: str, user_prompt: str, api_key: str, model_name: str, timeout: int, temperature: float = None) -> Optional[str]:
     """Call Google Gemini API."""
     gemini_model = _get_gemini_model(system_prompt, model_name, api_key)
     if not gemini_model:
@@ -202,7 +202,7 @@ def _call_gemini(system_prompt: str, user_prompt: str, api_key: str, model_name:
         response = gemini_model.generate_content(
             final_prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=LLM_CONFIG["temperature"]
+                temperature=temperature if temperature is not None else LLM_CONFIG["temperature"]
             ),
             request_options={"timeout": timeout}
         )
@@ -282,6 +282,59 @@ def call_llm_with_retry(system_prompt: str, user_prompt: str, lane: str = "RSS")
     logger.error("Failed to generate tweet after exhausting all keys and all models.")
     return None
 
+def polish_vietnamese(raw_content: str) -> Optional[str]:
+    """
+    Bước 2 (RSS-only): Dùng Gemma sửa chính tả tiếng Việt và dịch headline nếu còn tiếng Anh.
+    - Luôn dùng Gemma (free tier) với temperature=0 (deterministic).
+    - Length guard: nếu output chênh >20% so với input → giữ bản gốc.
+    """
+    if not raw_content or len(raw_content.strip()) < 10:
+        return None
+
+    polish_prompt = PROMPT_TEMPLATES.get("POLISH")
+    if not polish_prompt:
+        logger.warning("[POLISH] No POLISH prompt template configured. Skipping.")
+        return None
+
+    user_prompt = f"Kiểm tra và sửa bài viết sau:\n\n{raw_content}"
+
+    provider = ACTIVE_PROVIDER
+    api_keys = LLM_CONFIG.get(provider, {}).get("api_keys", [])
+    polish_model = "gemma-3-27b-it"
+    timeout = 30
+
+    for api_key in api_keys:
+        if api_key == "dummy_key_for_test":
+            continue
+
+        if provider == "gemini":
+            result = _call_gemini(polish_prompt, user_prompt, api_key, polish_model, timeout, temperature=0)
+        else:
+            logger.warning(f"[POLISH] Provider '{provider}' not supported for polish step. Skipping.")
+            return None
+
+        if result and result not in ("RATE_LIMIT", "FATAL_ERROR"):
+            # Length guard: chênh >20% → Gemma có thể đã sửa quá tay
+            len_diff = abs(len(result) - len(raw_content)) / max(len(raw_content), 1)
+            if len_diff > 0.20:
+                logger.warning(
+                    f"[POLISH] Output length changed by {len_diff:.0%} (>20%). "
+                    f"Gemma may have altered content. Keeping original."
+                )
+                return None
+
+            logger.info(f"[POLISH] ✅ Content polished successfully. Length delta: {len_diff:.0%}")
+            return result
+        elif result == "RATE_LIMIT":
+            logger.warning("[POLISH] Rate limited. Trying next key...")
+            continue
+        else:
+            logger.warning("[POLISH] Fatal error from Gemma. Keeping original.")
+            return None
+
+    logger.warning("[POLISH] All keys exhausted. Keeping original.")
+    return None
+
 def summarize_articles(selected_articles: List[Article], lane: str = "RSS") -> List[Article]:
     """
     Main Phase 5: Gửi từng bài được chọn cho LLM viết lại nội dung.
@@ -301,6 +354,13 @@ def summarize_articles(selected_articles: List[Article], lane: str = "RSS") -> L
         result = call_llm_with_retry(system_prompt, user_prompt, lane=lane)
         
         if result:
+            # Bước 2: Polish tiếng Việt (RSS only, Gemma miễn phí, temp=0)
+            if lane.upper() == "RSS":
+                logger.info(f"[POLISH] Starting Vietnamese polish for Article #{rank+1}...")
+                polished = polish_vietnamese(result)
+                if polished:
+                    result = polished
+
             article["tweet_content"] = result
             article["structured_content"] = parse_structured_output(result)
             processed_articles.append(article)
