@@ -212,6 +212,7 @@ def materialize_schedules():
     cursor = conn.cursor()
     
     inserted_count = 0
+    updated_count = 0
     # Quét từ hôm nay đến 6 ngày tới (đúng 1 tuần = 7 ngày)
     for d_offset in range(7):
         target_date = now + datetime.timedelta(days=d_offset)
@@ -239,13 +240,22 @@ def materialize_schedules():
                     ''', (job["name"], job["message"], channels_json, scheduled_str, image_path))
                     if cursor.rowcount > 0:
                         inserted_count += 1
+                    else:
+                        # Cập nhật config mới nhất cho job PENDING (chống stale data khi env var thay đổi)
+                        cursor.execute('''
+                            UPDATE announcement_executions 
+                            SET target_channels = ?, image_path = ?, message_text = ?
+                            WHERE job_name = ? AND scheduled_time = ? AND status = 'PENDING'
+                        ''', (channels_json, image_path, job["message"], job["name"], scheduled_str))
+                        if cursor.rowcount > 0:
+                            updated_count += 1
                 except sqlite3.Error as e:
                     print(f"⚠️ Lỗi Materialize DB: {e}")
                     
     conn.commit()
     conn.close()
-    if inserted_count > 0:
-        print(f"📅 [SCHEDULER] Đã sinh thêm {inserted_count} lịch post mới cho 7 ngày tới vào Database.")
+    if inserted_count > 0 or updated_count > 0:
+        print(f"📅 [SCHEDULER] Đã sinh {inserted_count} lịch mới + cập nhật {updated_count} lịch PENDING cho 7 ngày tới.")
 
 # ---------------------------------------------------------
 # THE SCHEDULING ENGINE
