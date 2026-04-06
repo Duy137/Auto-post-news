@@ -5,10 +5,10 @@ import logging
 from typing import List, Set, Dict, Any, Tuple, Optional
 
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from models import Article
 from modules.state_manager import get_recent_articles_for_dedup, create_event_root, log_article_event_root
-from modules.express_fingerprint import extract_fingerprints
+from modules.express.fingerprint import extract_fingerprints
 from config import DEDUP_CONFIG
 
 logger = logging.getLogger(__name__)

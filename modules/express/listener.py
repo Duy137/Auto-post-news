@@ -4,11 +4,11 @@ import time
 from telethon import TelegramClient, events
 from config import EXPRESS_CONFIG
 from modules.state_manager import check_and_insert_express_seen, check_recent_topic, insert_recent_topic
-from modules.express_filter import score_express_message
-from modules.express_fingerprint import extract_fingerprints
-from modules.summarize import call_llm_with_retry, parse_structured_output, get_prompt
+from modules.express.filter import score_express_message
+from modules.express.fingerprint import extract_fingerprints
+from modules.pipeline.summarize import call_llm_with_retry, parse_structured_output, get_prompt
 from config import EXPRESS_CONFIG, ORCHESTRATION_CONFIG, reload_config
-from modules.publisher import publish_all_platforms
+from modules.publishing.publisher import publish_all_platforms
 import hashlib
 
 logger = logging.getLogger("EXPRESS_LISTENER")
@@ -20,8 +20,6 @@ INDICATORS = ["🔴"] #"🔵", "🆘", "🔥"
 class ExpressListener:
     def __init__(self):
         self.enabled = EXPRESS_CONFIG.get("express_enabled", False)
-        self.api_id = EXPRESS_CONFIG.get("api_id")
-        self.api_hash = EXPRESS_CONFIG.get("api_hash")
         self.phone = EXPRESS_CONFIG.get("phone")
         self.source_channel = EXPRESS_CONFIG.get("source_channel")
         self.client = None
@@ -34,23 +32,18 @@ class ExpressListener:
         if not self.enabled:
             logger.info("Express Lane is DISABLED in config.")
             return
-            
-        if not self.api_id or self.api_id == "dummy_api_id" or not self.api_hash or self.api_hash == "dummy_api_hash":
+        
+        from modules.publishing.telethon_client import get_shared_telethon_client, is_client_available
+        
+        if not is_client_available():
             logger.warning("Telegram API ID/Hash is not configured properly. Express Listener cannot start.")
             return
 
-        api_id_int = int(self.api_id)
-        from telethon.sessions import StringSession
-        from config import DATA_DIR
-        import os
-        
-        # Initialize Client once
-        session_val = os.environ.get("TG_STRING_SESSION")
-        if session_val:
-            self.client = TelegramClient(StringSession(session_val), api_id_int, self.api_hash)
-        else:
-            session_path = os.path.join(DATA_DIR, 'express_session')
-            self.client = TelegramClient(session_path, api_id_int, self.api_hash)
+        # Dùng shared Telethon client (singleton)
+        self.client = get_shared_telethon_client()
+        if not self.client:
+            logger.error("Failed to get shared Telethon client.")
+            return
         
         # Register Handler
         @self.client.on(events.NewMessage(chats=self.source_channel))

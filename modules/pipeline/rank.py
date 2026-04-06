@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Tuple
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from models import Article, ScoreDetail
 from config import SCORING_WEIGHTS, RSS_SOURCES, ORCHESTRATION_CONFIG
@@ -18,7 +18,7 @@ SOURCE_CREDIBILITY = {s["name"]: s.get("credibility_score", 1.0) for s in RSS_SO
 SOURCE_LATENCY = {s["name"]: s.get("latency_advantage_score", 1.0) for s in RSS_SOURCES}
 
 from modules.state_manager import check_recent_topic, get_posted_titles_24h
-from modules.express_fingerprint import extract_fingerprints
+from modules.express.fingerprint import extract_fingerprints
 
 def clean_text(text: str) -> str: #Chà nhám văn bản (xóa dấu phẩy, viết thường hết) để chuẩn bị cho việc dò tìm từ khóa.
     """Loại bỏ dấu câu và lowercase text."""
@@ -170,22 +170,18 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
     base_score = SCORING_WEIGHTS["base_score"]
     
     # [V4.9] Entity Fatigue: đếm entity đã POSTED trong 24h
-    # Nếu XRP đã xuất hiện 3 bài → bài XRP tiếp theo bị phạt nặng
+    # [V5.1] Mở rộng: dùng extract_fingerprints() để detect MỌI entity (proper nouns, $TOKEN, ALL CAPS...)
+    # thay vì chỉ check danh sách cố định từ config.
     posted_titles = get_posted_titles_24h()
     entity_post_count: Dict[str, int] = {}
-    all_entity_lists = (
-        SCORING_WEIGHTS.get("major_tokens", []) +
-        SCORING_WEIGHTS.get("major_exchanges", []) +
-        SCORING_WEIGHTS.get("macro_entities", [])
-    )
     for ptitle in posted_titles:
-        ptitle_lower = ptitle.lower()
-        for ent in all_entity_lists:
-            if re.search(r'\b' + re.escape(ent.lower()) + r'\b', ptitle_lower):
-                ent_key = ent.lower()
-                entity_post_count[ent_key] = entity_post_count.get(ent_key, 0) + 1
+        posted_fps = extract_fingerprints(ptitle)
+        for fp in posted_fps:
+            entity_post_count[fp] = entity_post_count.get(fp, 0) + 1
     if entity_post_count:
-        logger.info(f"📊 [ENTITY FATIGUE] Posted entities 24h: {dict(sorted(entity_post_count.items(), key=lambda x: -x[1])[:10])}")
+        # Log top 10 entity xuất hiện nhiều nhất
+        top_entities = dict(sorted(entity_post_count.items(), key=lambda x: -x[1])[:10])
+        logger.info(f"📊 [ENTITY FATIGUE] Posted entities 24h: {top_entities}")
 
     # 2. Xếp hạng từng bài
     for art in articles:
@@ -237,21 +233,19 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
         # F. FINAL SCORE formula (V4.1 Trend-Aware)
         total_score = editorial_score * decay_mult
 
-        # [V4.9] Entity Fatigue Penalty
-        # Nếu entity chính của bài đã xuất hiện nhiều trong 24h POSTED → phạt
+        # [V5.1] Entity Fatigue Penalty — dùng extract_fingerprints() cho MỌI entity
+        # Nếu entity của bài đã xuất hiện nhiều trong 24h POSTED → phạt
         # Giảm tuyến tính: lần 1=1.0, lần 2=0.8, lần 3=0.6, lần 4=0.4, lần 5=0.2, lần 6+=0.0
-        art_title_lower = art["title"].lower()
+        art_fingerprints = extract_fingerprints(art["title"])
         entity_fatigue_mult = 1.0
         fatigue_entity = None
-        for ent in all_entity_lists:
-            ent_lower = ent.lower()
-            if re.search(r'\b' + re.escape(ent_lower) + r'\b', art_title_lower):
-                count = entity_post_count.get(ent_lower, 0)
-                if count >= 1:
-                    mult = max(1.0 - count * 0.2, 0.0)
-                    if mult < entity_fatigue_mult:
-                        entity_fatigue_mult = mult
-                        fatigue_entity = ent_lower
+        for fp in art_fingerprints:
+            count = entity_post_count.get(fp, 0)
+            if count >= 1:
+                mult = max(1.0 - count * 0.2, 0.0)
+                if mult < entity_fatigue_mult:
+                    entity_fatigue_mult = mult
+                    fatigue_entity = fp
         
         if entity_fatigue_mult < 1.0:
             total_score *= entity_fatigue_mult

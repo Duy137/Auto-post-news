@@ -8,7 +8,7 @@ import html
 from typing import List, Dict, Any, Optional
 
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import tweepy
 
@@ -201,7 +201,134 @@ PUBLISHERS = {
     "facebook": publish_to_facebook
 }
 
-# --- MAIN EXECUTOR ---
+# --- SINGLE-PLATFORM PUBLISHER (V5.0 — Per-Platform Timer) ---
+def publish_single_from_queue(queue_item: dict, platform: str, lane: str = "RSS") -> PlatformResult:
+    """
+    Đăng 1 bài từ publish_queue lên 1 nền tảng cụ thể.
+    queue_item chứa: content_telegram, content_twitter, content_facebook, article_link, article_id...
+    """
+    is_dry_run = TWITTER_CONFIG["dry_run"]
+    
+    content_key = f"content_{platform}"
+    content = queue_item.get(content_key, "")
+    if not content:
+        logger.warning(f"[QUEUE PUBLISH] No content for platform '{platform}' in queue item {queue_item.get('article_id')}")
+        return {"success": False, "post_id": None, "error": "Empty content"}
+    
+    # Tạo article mock để tương thích với publish functions hiện tại
+    article_mock = {
+        "id": queue_item.get("article_id", ""),
+        "title": queue_item.get("headline", ""),
+        "link": queue_item.get("article_link", ""),
+        "tweet_content": content,
+        # Bypass build_content bằng cách đặt structured_content rỗng
+        # Content đã được format sẵn khi vào queue
+    }
+    
+    # Idempotency check
+    event_fp = queue_item.get("article_id", "")
+    if sm.is_event_published(event_fp, platform):
+        logger.info(f"⏭️ [QUEUE PUBLISH] Article '{event_fp}' already published on {platform}. Skipping.")
+        return {"success": False, "is_duplicate": True, "post_id": "already_posted", "error": "Duplicate"}
+    
+    publisher_func = PUBLISHERS.get(platform)
+    if not publisher_func:
+        return {"success": False, "post_id": None, "error": f"No publisher for {platform}"}
+    
+    try:
+        # Publish bằng cách gọi trực tiếp API thay vì qua build_content
+        if platform == "telegram":
+            res = _publish_raw_telegram(content, queue_item.get("article_link", ""), is_dry_run, lane)
+        elif platform == "twitter":
+            res = _publish_raw_twitter(content, is_dry_run)
+        elif platform == "facebook":
+            res = _publish_raw_facebook(content, is_dry_run)
+        else:
+            res = publisher_func(article_mock, is_dry_run, lane)
+        
+        if res.get("success"):
+            sm.mark_event_published(event_fp, platform, lane)
+            logger.info(f"✅ [QUEUE PUBLISH] Article '{event_fp}' → {platform} → SUCCESS (post_id={res.get('post_id')})")
+        else:
+            logger.error(f"❌ [QUEUE PUBLISH] Article '{event_fp}' → {platform} → FAILED: {res.get('error')}")
+        
+        return res
+    except Exception as e:
+        logger.error(f"💥 [QUEUE PUBLISH] Fatal error publishing to {platform}: {e}")
+        return {"success": False, "post_id": None, "error": str(e)}
+
+
+def _publish_raw_telegram(content: str, link: str, is_dry_run: bool, lane: str = "RSS") -> PlatformResult:
+    """Đăng nội dung đã format sẵn lên Telegram (không qua build_content)."""
+    if is_dry_run:
+        logger.info(f"[DRY RUN - TELEGRAM QUEUE] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
+        return {"success": True, "post_id": f"mock_tg_{int(time.time())}", "error": None}
+    
+    bot_token = TELEGRAM_CONFIG.get("bot_token")
+    chat_id = TELEGRAM_CONFIG.get("chat_ids", {}).get(lane)
+    if not bot_token or not chat_id:
+        return {"success": False, "post_id": None, "error": f"Missing Telegram config for lane {lane}"}
+    
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": content,
+        "parse_mode": "HTML",
+        "link_preview_options": {
+            "url": link,
+            "is_disabled": False,
+            "prefer_large_media": True,
+            "show_above_text": False
+        }
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return {"success": True, "post_id": str(data.get("result", {}).get("message_id")), "error": None}
+    except Exception as e:
+        return {"success": False, "post_id": None, "error": str(e)}
+
+
+def _publish_raw_twitter(content: str, is_dry_run: bool) -> PlatformResult:
+    """Đăng nội dung đã format sẵn lên Twitter."""
+    if is_dry_run:
+        logger.info(f"[DRY RUN - TWITTER QUEUE] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
+        return {"success": True, "post_id": f"mock_tw_{int(time.time())}", "error": None}
+    
+    client = get_twitter_client(False)
+    try:
+        response = client.create_tweet(text=content)
+        return {"success": True, "post_id": response.data['id'], "error": None}
+    except Exception as e:
+        return {"success": False, "post_id": None, "error": str(e)}
+
+
+def _publish_raw_facebook(content: str, is_dry_run: bool) -> PlatformResult:
+    """Đăng nội dung đã format sẵn lên Facebook."""
+    if is_dry_run:
+        logger.info(f"[DRY RUN - FACEBOOK QUEUE] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
+        return {"success": True, "post_id": f"mock_fb_{int(time.time())}", "error": None}
+    
+    page_token = FACEBOOK_CONFIG.get("page_access_token")
+    page_id = FACEBOOK_CONFIG.get("page_id")
+    if not page_token or not page_id:
+        return {"success": False, "post_id": None, "error": "Missing Facebook config"}
+    
+    url = f"https://graph.facebook.com/v19.0/{page_id}/feed"
+    payload = {"message": content, "access_token": page_token}
+    
+    try:
+        response = requests.post(url, data=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return {"success": True, "post_id": data.get("id"), "error": None}
+    except Exception as e:
+        return {"success": False, "post_id": None, "error": str(e)}
+
+
+# --- MAIN EXECUTOR (Express Lane + Legacy) ---
 def publish_all_platforms(articles: List[Article], source_lane: str = "RSS") -> List[PublishResult]:
     """
     Main Phase 6: Xuất bản lên đa nền tảng.

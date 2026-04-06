@@ -16,9 +16,12 @@ def reload_config():
     ORCHESTRATION_CONFIG["express_throttle_minutes"] = int(os.environ.get("EXPRESS_THROTTLE_MINUTES", "3"))
     ORCHESTRATION_CONFIG["rss_penalty_multiplier"] = float(os.environ.get("RSS_PENALTY_MULTIPLIER", "0.1"))
     ORCHESTRATION_CONFIG["express_retry_attempts"] = int(os.environ.get("EXPRESS_RETRY_ATTEMPTS", "2"))
-    ORCHESTRATION_CONFIG["express_retry_backoff_sec"] = int(os.environ.get("express_retry_backoff_sec", "30"))
-    ORCHESTRATION_CONFIG["rss_mode"] = os.environ.get("RSS_MODE", "interval").lower()
-    ORCHESTRATION_CONFIG["rss_schedule"] = [t.strip() for t in os.environ.get("RSS_SCHEDULE", "08:00,11:00,14:00,17:00,20:00,23:00").split(",") if t.strip()]
+    ORCHESTRATION_CONFIG["express_retry_backoff_sec"] = int(os.environ.get("EXPRESS_RETRY_BACKOFF_SEC", "30"))
+    
+    # V5.0: Reload per-platform timing
+    ORCHESTRATION_CONFIG["content_pipeline_interval_minutes"] = int(os.environ.get("CONTENT_PIPELINE_INTERVAL", "30"))
+    ORCHESTRATION_CONFIG["publish_check_interval_minutes"] = int(os.environ.get("PUBLISH_CHECK_INTERVAL", "5"))
+    ORCHESTRATION_CONFIG["queue_max_age_hours"] = float(os.environ.get("QUEUE_MAX_AGE_HOURS", "6"))
     
     # Reload LLM Provider too
     LLM_CONFIG["active_provider"] = os.environ.get("LLM_PROVIDER", "gemini").lower()
@@ -55,9 +58,46 @@ ORCHESTRATION_CONFIG = {
     "express_retry_attempts": int(os.environ.get("EXPRESS_RETRY_ATTEMPTS", "2")),
     "express_retry_backoff_sec": int(os.environ.get("EXPRESS_RETRY_BACKOFF_SEC", "30")),
     
-    # RSS Mechanism: 'interval' (cách 1 khoảng) hoặc 'scheduled' (theo giờ cố định)
-    "rss_mode": os.environ.get("RSS_MODE", "interval").lower(),
-    "rss_schedule": [t.strip() for t in os.environ.get("RSS_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()]
+    # [LEGACY] RSS Mechanism cũ — giữ lại cho backwards compatibility
+    #"rss_mode": os.environ.get("RSS_MODE", "interval").lower(),
+    #"rss_schedule": [t.strip() for t in os.environ.get("RSS_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
+    
+    # ===== PER-PLATFORM PUBLISHING TIMER (V5.0) =====
+    
+    # Content Pipeline: quét RSS và chuẩn bị bài sẵn vào kho (không đăng)
+    "content_pipeline_interval_minutes": int(os.environ.get("CONTENT_PIPELINE_INTERVAL", "30")),
+    
+    # Publish Checker: mỗi N phút check timing từng platform và đăng nếu đến giờ
+    "publish_check_interval_minutes": int(os.environ.get("PUBLISH_CHECK_INTERVAL", "5")),
+    
+    # Bài trong kho quá N giờ → expired, không đăng nữa (tránh đăng tin cũ)
+    "queue_max_age_hours": float(os.environ.get("QUEUE_MAX_AGE_HOURS", "6")),
+    
+    # Per-platform timing — mỗi nền tảng có cơ chế tính giờ riêng
+    # mode: "gap" (check khoảng cách bài cuối trên channel)
+    #        "scheduled" (đăng đúng giờ cố định)
+    #        "interval" (cách đều N giờ kể từ lần đăng trước)
+    "platform_timing": {
+        "telegram": {
+            "mode": os.environ.get("TG_PUBLISH_MODE", "gap"),
+            "min_gap_hours": float(os.environ.get("TG_MIN_GAP_HOURS", "4")),
+            "gap_channel_id": os.environ.get("TG_GAP_CHANNEL_ID", ""),
+            "schedule": [t.strip() for t in os.environ.get("TG_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
+            "interval_hours": float(os.environ.get("TG_INTERVAL_HOURS", "4")),
+        },
+        "twitter": {
+            "mode": os.environ.get("TW_PUBLISH_MODE", "scheduled"),
+            "min_gap_hours": float(os.environ.get("TW_MIN_GAP_HOURS", "4")),
+            "schedule": [t.strip() for t in os.environ.get("TW_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
+            "interval_hours": float(os.environ.get("TW_INTERVAL_HOURS", "6")),
+        },
+        "facebook": {
+            "mode": os.environ.get("FB_PUBLISH_MODE", "interval"),
+            "min_gap_hours": float(os.environ.get("FB_MIN_GAP_HOURS", "4")),
+            "schedule": [t.strip() for t in os.environ.get("FB_SCHEDULE", "").split(",") if t.strip()],
+            "interval_hours": float(os.environ.get("FB_INTERVAL_HOURS", "6")),
+        },
+    },
 }
 
 class RssSource(TypedDict):
@@ -238,8 +278,8 @@ SCORING_WEIGHTS: ScoringWeights = {
         "macro_politics": 5.0,
         "major_tech": 3.0,
         "price_analysis": -18.0,
-        "business_development": 7.0,
-        "negative_event": 7.0
+        "business_development": 8.0,
+        "negative_event": 8.0
     },
     
     "major_tokens": [
@@ -497,21 +537,127 @@ DEDUP_CONFIG = {
     "similarity_threshold": 0.38,
 
     # Normalize phrase nhiều chữ -> entity chuẩn (áp dụng TRƯỚC khi tokenize)
+    # Mục đích: 2 bài dùng cách gọi khác nhau cho cùng 1 thực thể → quy về 1 token chung → dedup chính xác hơn
     "normalization_phrases": {
-        "us regulator": "sec",
-        "u.s. regulator": "sec",
-        "us securities": "sec",
+        # === Cơ quan quản lý Mỹ ===
+        "securities and exchange commission": "sec",
+        "u.s. securities and exchange commission": "sec",
+        "us securities and exchange commission": "sec",
+        "commodity futures trading commission": "cftc",
+        "u.s. commodity futures trading commission": "cftc",
+        "department of justice": "doj",
+        "u.s. department of justice": "doj",
+        "us department of justice": "doj",
+        "financial crimes enforcement network": "fincen",
+        "internal revenue service": "irs",
+        "office of the comptroller": "occ",
+        
+        # === Ngân hàng Trung ương ===
         "federal reserve": "fed",
+        "the fed": "fed",
+        "federal open market committee": "fomc",
+        "european central bank": "ecb",
+        "bank of japan": "boj",
+        "bank of england": "boe",
+        "people's bank of china": "pboc",
+        "reserve bank of australia": "rba",
+        "bank of canada": "boc",
+        "swiss national bank": "snb",
+        
+        # === Quốc gia / Khu vực ===
         "united states": "usa",
+        "united kingdom": "uk",
+        "south korea": "korea",
+        "north korea": "dprk",
+        "saudi arabia": "saudi",
+        "hong kong": "hongkong",
+        "european union": "eu",
+        "middle east": "mideast",
+        
+        # === Tổ chức quốc tế ===
+        "international monetary fund": "imf",
+        "world bank": "worldbank",
+        "world economic forum": "wef",
+        
+        # === Sàn giao dịch ===
+        "binance exchange": "binance",
+        "coinbase exchange": "coinbase",
+        "new york stock exchange": "nyse",
+        "wall street": "wallstreet",
+        
+        # === Crypto Projects / DAOs ===
+        "bitcoin etf": "btc_etf",
+        "spot bitcoin etf": "btc_etf",
+        "bitcoin spot etf": "btc_etf",
+        "ethereum etf": "eth_etf",
+        "spot ethereum etf": "eth_etf",
+        "spot ether etf": "eth_etf",
+        
+        # === Macro Events ===
+        "interest rate": "interest_rate",
+        "rate cut": "rate_cut",
+        "rate hike": "rate_hike",
+        "quantitative easing": "qe",
+        "quantitative tightening": "qt",
+        "consumer price index": "cpi",
+        "producer price index": "ppi",
+        "gross domestic product": "gdp",
+        "non-farm payrolls": "nonfarm",
+        "nonfarm payrolls": "nonfarm",
+        "jobless claims": "unemployment",
+        
+        # === Nhân vật ===
+        "jerome powell": "powell",
+        "jay powell": "powell",
+        "gary gensler": "gensler",
+        "janet yellen": "yellen",
+        "christine lagarde": "lagarde",
+        "elon musk": "musk",
+        "michael saylor": "saylor",
+        "changpeng zhao": "cz",
+        "donald trump": "trump",
+        "joe biden": "biden",
+        "vitalik buterin": "vitalik",
     },
 
     # Normalize token đơn -> token chuẩn (áp dụng SAU khi tokenize)
+    # Mục đích: ticker symbol và tên đầy đủ → quy về 1 token duy nhất
     "normalization_tokens": {
+        # === Major Tokens ===
         "btc": "bitcoin",
         "eth": "ethereum",
+        "ether": "ethereum",
         "sol": "solana",
         "xrp": "ripple",
         "bnb": "binance",
+        "ada": "cardano",
+        "dot": "polkadot",
+        "avax": "avalanche",
+        "matic": "polygon",
+        "pol": "polygon",
+        "doge": "dogecoin",
+        "shib": "shiba",
+        "link": "chainlink",
+        "uni": "uniswap",
+        "ltc": "litecoin",
+        "atom": "cosmos",
+        "near": "nearprotocol",
+        "apt": "aptos",
+        "sui": "suinetwork",
+        "arb": "arbitrum",
+        "op": "optimism",
+        "trx": "tron",
+        "ton": "toncoin",
+        "hbar": "hedera",
+        
+        # === Stablecoins ===
+        "usdt": "tether",
+        "usdc": "usdcoin",
+        
+        # === Sàn (viết tắt) ===
+        "cex": "exchange",
+        "dex": "decentralized_exchange",
     },
 }
+
 

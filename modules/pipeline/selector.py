@@ -4,11 +4,11 @@ from typing import List
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from models import Article
 from config import SCORING_WEIGHTS
-from modules.deduplicator import get_article_tokens, calculate_jaccard_similarity, SIMILARITY_THRESHOLD
+from modules.pipeline.deduplicator import get_article_tokens, calculate_jaccard_similarity, SIMILARITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
 

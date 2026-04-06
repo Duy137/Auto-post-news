@@ -125,6 +125,37 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_published_fp_platform ON published_events(fingerprint, platform)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_published_created ON published_events(created_at)')
         
+        # 1.4 Publish Queue (V5.0 — Per-Platform Timer)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS publish_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id TEXT NOT NULL UNIQUE,
+                headline TEXT,
+                content_telegram TEXT,
+                content_twitter TEXT,
+                content_facebook TEXT,
+                article_link TEXT,
+                editorial_score REAL,
+                published_ts INTEGER,
+                status TEXT DEFAULT 'READY',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_pq_status ON publish_queue(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_pq_created ON publish_queue(created_at)')
+        
+        # 1.5 Platform Publish Log (V5.0 — tracking thời gian đăng mỗi platform)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS platform_publish_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                platform TEXT NOT NULL,
+                queue_item_id INTEGER,
+                article_id TEXT,
+                published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ppl_platform ON platform_publish_log(platform, published_at)')
+        
         # 2. Indexes for Query Performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_state ON articles(state)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_updated_at ON articles(updated_at)')
@@ -501,19 +532,135 @@ def mark_event_published(fingerprint: str, platform: str, lane: str):
         conn.commit()
 
 # ==========================================
+# PUBLISH QUEUE (V5.0 — Per-Platform Timer)
+# ==========================================
+import math
+
+def insert_to_publish_queue(
+    article_id: str, headline: str, content_telegram: str, content_twitter: str,
+    content_facebook: str, article_link: str, editorial_score: float, published_ts: int
+) -> bool:
+    """Lưu bài đã summarize vào kho. Trả về True nếu insert thành công, False nếu đã tồn tại."""
+    with get_db_connection() as conn:
+        try:
+            conn.execute('''
+                INSERT INTO publish_queue 
+                (article_id, headline, content_telegram, content_twitter, content_facebook,
+                 article_link, editorial_score, published_ts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (article_id, headline, content_telegram, content_twitter, content_facebook,
+                  article_link, editorial_score, published_ts))
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False  # article_id UNIQUE constraint
+
+def pick_best_from_queue(platform: str, max_age_hours: float = 12.0) -> Optional[Dict[str, Any]]:
+    """
+    Lấy bài tốt nhất từ kho cho platform cụ thể.
+    - Chỉ lấy bài READY, chưa quá max_age_hours
+    - Bỏ qua bài đã đăng trên platform này (check platform_publish_log)
+    - Tính lại time_decay tại thời điểm hiện tại
+    - Trả về bài có adjusted_score cao nhất
+    """
+    from config import SCORING_WEIGHTS
+    
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Lấy tất cả bài READY chưa expired, bỏ qua bài đã đăng platform này
+        cursor.execute(f'''
+            SELECT pq.* FROM publish_queue pq
+            WHERE pq.status = 'READY'
+            AND pq.created_at >= datetime('now', '-{int(max_age_hours)} hours')
+            AND pq.article_id NOT IN (
+                SELECT ppl.article_id FROM platform_publish_log ppl
+                WHERE ppl.platform = ?
+            )
+            ORDER BY pq.editorial_score DESC
+        ''', (platform,))
+        
+        rows = cursor.fetchall()
+        if not rows:
+            return None
+        
+        # Tính lại decay cho từng bài và chọn bài tốt nhất
+        current_ts = int(time.time())
+        lmbda = SCORING_WEIGHTS.get("time_decay_lambda_per_hour", 0.04)
+        best_item = None
+        best_score = -1.0
+        
+        for row in rows:
+            row_dict = dict(row)
+            pub_ts = row_dict.get("published_ts") or current_ts
+            hours_passed = max((current_ts - pub_ts) / 3600.0, 0)
+            fresh_decay = max(math.exp(-lmbda * hours_passed), 0.12)
+            adjusted = (row_dict.get("editorial_score") or 0) * fresh_decay
+            row_dict["adjusted_score"] = round(adjusted, 2)
+            row_dict["fresh_decay"] = round(fresh_decay, 4)
+            
+            if adjusted > best_score:
+                best_score = adjusted
+                best_item = row_dict
+        
+        return best_item
+
+def mark_queue_published(article_id: str, platform: str):
+    """Ghi log đã đăng bài lên platform cụ thể."""
+    with get_db_connection() as conn:
+        conn.execute('''
+            INSERT INTO platform_publish_log (platform, article_id)
+            VALUES (?, ?)
+        ''', (platform, article_id))
+        conn.commit()
+
+def get_last_publish_time_db(platform: str) -> Optional[str]:
+    """Lấy thời điểm đăng bài cuối cùng của platform (từ DB nội bộ). Trả về ISO string hoặc None."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT published_at FROM platform_publish_log
+            WHERE platform = ?
+            ORDER BY published_at DESC
+            LIMIT 1
+        ''', (platform,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+
+def expire_old_queue_items(max_age_hours: float = 12.0):
+    """Đánh dấu bài quá cũ trong kho là EXPIRED."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f'''
+            UPDATE publish_queue SET status = 'EXPIRED'
+            WHERE status = 'READY'
+            AND created_at < datetime('now', '-{int(max_age_hours)} hours')
+        ''')
+        expired = cursor.rowcount
+        conn.commit()
+        if expired > 0:
+            logger.info(f"📦 [QUEUE] Expired {expired} stale items from publish_queue.")
+
+# ==========================================
 # MAINTENANCE: GARBAGE COLLECTION
 # ==========================================
 
 def perform_routine_maintenance():
     """
-    Dọn dẹp tự động (Auto-Cleanup) tất cả dữ liệu rác cũ theo yêu cầu của System Architect:
+    Dọn dẹp tự động (Auto-Cleanup) tất cả dữ liệu rác cũ:
     - articles: giữ 2 ngày
     - recent_topics: giữ 48 hours
     - express_seen: giữ 24 hours
     - published_events: giữ 7 ngày
+    - publish_queue (EXPIRED): giữ 24 hours
+    - platform_publish_log: giữ 7 ngày
     """
     logger.info("🧹 [MAINTENANCE] Bắt đầu dọn dẹp Database tự động...")
     try:
+        # Expire bài cũ trong kho trước
+        from config import ORCHESTRATION_CONFIG
+        max_age = ORCHESTRATION_CONFIG.get("queue_max_age_hours", 12)
+        expire_old_queue_items(max_age)
+        
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
@@ -533,9 +680,17 @@ def perform_routine_maintenance():
             cursor.execute("DELETE FROM published_events WHERE created_at < datetime('now', '-7 days')")
             deleted_published = cursor.rowcount
             
+            # 5. Dọn dẹp Publish Queue EXPIRED (> 24h)
+            cursor.execute("DELETE FROM publish_queue WHERE status = 'EXPIRED' AND created_at < datetime('now', '-24 hours')")
+            deleted_queue = cursor.rowcount
+            
+            # 6. Dọn dẹp Platform Publish Log (> 7 days)
+            cursor.execute("DELETE FROM platform_publish_log WHERE published_at < datetime('now', '-7 days')")
+            deleted_ppl = cursor.rowcount
+            
             conn.commit()
             
-            logger.info(f"🧹 [MAINTENANCE] Đã xóa: {deleted_articles} articles, {deleted_topics} topics, {deleted_express} express hash, {deleted_published} published events.")
+            logger.info(f"🧹 [MAINTENANCE] Đã xóa: {deleted_articles} articles, {deleted_topics} topics, {deleted_express} express, {deleted_published} pub_events, {deleted_queue} queue, {deleted_ppl} pub_log.")
             
             # Thực thi SQLite Vacuum để nén file DB, giải phóng dung lượng ổ cứng
             cursor.execute("VACUUM")
