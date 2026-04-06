@@ -1,6 +1,6 @@
-# Deduplication System Documentation — V4.8.1
+# Deduplication System Documentation — V4.9
 
-> Cập nhật: 2026-03-28 | Phản ánh trạng thái sau khi upgrade lên EnhancedSimilarity.
+> Cập nhật: 2026-04-05 | Sửa lỗi entity_sim formula, thêm giải thích Trend Bonus.
 
 ---
 
@@ -11,7 +11,7 @@ Hệ thống deduplicate (`deduplicator.py`) là **Phase 2** trong pipeline RSS.
 1. **In-batch clustering** — gom nhóm bài trùng trong 1 lần fetch
 2. **Cross-session dedup** — so sánh với bài đã thấy trong 48h qua từ DB
 
-Đầu ra là danh sách **Lead Articles** — mỗi sự kiện chỉ có 1 đại diện duy nhất.
+Đầu ra là danh sách **Lead Articles** — mỗi sự kiện chỉ có 1 đại diện duy nhất, kèm theo `cluster_size` (số bài trong cluster) để Phase 3 tính Trend Bonus.
 
 ---
 
@@ -30,22 +30,23 @@ for each article in collected_articles:
   ┌── BƯỚC 1: In-batch clustering
   │   So sánh với tất cả lead_articles đã accumulate trong vòng lặp này
   │   Dùng EnhancedSimilarity (threshold=0.38)
-  │   → Nếu sim >= 0.38: gom vào cluster, tăng cluster_size, SKIP bài này
+  │   → Nếu sim >= 0.38: gom vào cluster, tăng cluster_size cho Lead, SKIP bài này
   │
   ├── BƯỚC 2: Cross-session dedup (nếu BƯỚC 1 không match)
   │   So sánh với recent_articles từ DB (window 48h theo published_ts)
   │   Dùng EnhancedSimilarity (threshold=0.38)
   │   → Nếu sim >= 0.38: bài đã đưa tin trong 48h → SKIP bài này
+  │   ⚠️ KHÔNG tăng cluster_size (bài cũ đã qua pipeline rồi)
   │
   ├── BƯỚC 3: Narrative Continuity (nếu chưa bị SKIP)
   │   So sánh với recent_articles từ DB (window 5 ngày, threshold thấp=0.25)
   │   → Nếu match: gắn event_root_id từ sự kiện cũ (follow-up article)
   │   → Nếu không: tạo event_root_id mới
   │
-  └── Thêm vào unique_articles (trở thành Lead Article)
+  └── Thêm vào unique_articles (trở thành Lead Article, cluster_size=1)
          │
          ▼
-[Phase 2 Output] unique_articles (Lead Articles, mỗi event 1 bài)
+[Phase 2 Output] unique_articles (Lead Articles, mỗi event 1 bài, kèm cluster_size)
 ```
 
 ---
@@ -73,10 +74,10 @@ Fingerprints được **trim xuống 2 chữ đầu** để tránh CamelCase ove
 Fingerprints được **normalize**: `btc→bitcoin`, `eth→ethereum`, `bnb→binance`...
 
 ```
-entity_sim = |intersection| / min(|ents_A|, |ents_B|, 1)
+entity_sim = |intersection| / max(|ents_A|, |ents_B|, 1)
 ```
 
-> Dùng `min` thay vì `max` để noise entity trong một bài không làm loãng match.
+> **Dùng `max`** (không phải `min`) — tránh trường hợp bài chỉ có 1 entity chung (bitcoin) nhưng entity_sim = 1.0 vì min(3,1)=1 → 1/1=1.0 → gom nhầm cluster quá lớn. Với max: 1/max(3,1) = 0.33 → chính xác hơn.
 
 ### 3.2 Token Jaccard (trọng số 0.4 — tín hiệu phụ)
 
@@ -96,7 +97,75 @@ score <  0.38 → sự kiện khác nhau → GIỮ LẠI
 
 ---
 
-## 4. Data Flow (State Database)
+## 4. Dedup và Trend Bonus — Không Mâu Thuẫn
+
+### 4.1 Trend Bonus là gì?
+
+Trong Phase 3 (Ranking), `rank.py` dùng `cluster_size` để cộng **Trend Bonus** — nếu nhiều nguồn cùng đưa tin về 1 sự kiện, bài Lead được tăng điểm:
+
+```python
+# rank.py
+MAX_CLUSTER_SIZE = 5
+cluster_size = min(art.get("cluster_size", 1), MAX_CLUSTER_SIZE)
+trend_bonus  = (cluster_size - 1) * cluster_trend_bonus   # mặc định 1.0/bài
+```
+
+Ví dụ: cluster_size = 4 → trend_bonus = +3.0 điểm.
+
+### 4.2 Tại sao không mâu thuẫn?
+
+Có thể nhầm tưởng Dedup "loại bỏ bài" và Trend Bonus "thưởng bài nhiều nguồn" là đối nghịch. Thực tế không phải:
+
+**Dedup không xóa thông tin, mà chuyển thành tín hiệu:**
+
+```
+5 bài cùng sự kiện  →  Dedup gom cluster
+                         ├── DROP 4 bài phụ (đúng, tránh đăng trùng)
+                         └── Lead Article nhận cluster_size = 5
+                                  ↓
+                         Phase 3: trend_bonus = (5-1) × 1.0 = +4.0
+                                  ↓
+                         Lead Article ĐƯỢC BOOST nhờ cluster lớn
+```
+
+Hai cơ chế **hợp tác** chứ không chống nhau:
+- Dedup loại bỏ bài trùng → đảm bảo không đăng 5 bài giống nhau
+- Trend Bonus thưởng bài được nhiều nguồn đưa tin → bài quan trọng hơn leo lên top
+
+### 4.3 Vòng đời của cluster_size (quan trọng)
+
+`cluster_size` **không được lưu vào DB** — nó chỉ tồn tại trong RAM của 1 cycle:
+
+```
+Phase 2: tạo cluster_size trên dict article (RAM)
+  ↓
+Phase 3: đọc cluster_size → tính trend_bonus
+  ↓
+Phase 4-6: chọn bài, summarize, đăng
+  ↓
+Cycle kết thúc → Python garbage collector xóa → cluster_size biến mất
+  ↓
+Cycle mới → deduplicate_articles() chạy lại → cluster_size hoàn toàn mới
+```
+
+**Không cần logic hủy hoặc expire cluster_size** vì nó tự chết khi cycle xong.
+
+### 4.4 Giới hạn: Trend Bonus chỉ hoạt động trong cùng 1 cycle
+
+Nếu 5 nguồn đưa tin về cùng 1 sự kiện nhưng RSS fetch chúng ở **các cycle khác nhau**:
+
+| Cycle | Bài | Kết quả |
+|:---|:---|:---|
+| Cycle 1 (7:00) | Bài A về Drift hack | A trở thành Lead, cluster_size=1, trend_bonus=0 → **POSTED** |
+| Cycle 2 (9:00) | Bài B, C, D về Drift hack | Cross-session dedup bắt (sim ≥ 0.38) → **DROP hết** |
+
+→ Bài A được đăng với trend_bonus=0, dù thực tế 4 nguồn nữa cũng đưa tin. Tín hiệu trend bị mất vì các bài đến ở khác cycle.
+
+**Đây là đặc điểm thiết kế, không phải bug.** Trend Bonus được thiết kế để ưu tiên bài "nóng" khi nhiều nguồn ĐỒNG THỜI đưa tin trong cùng batch RSS, không phải để tích lũy qua thời gian.
+
+---
+
+## 5. Data Flow (State Database)
 
 ```
 SQLite Database:
@@ -141,65 +210,51 @@ Phase 6 (publisher) - sau khi đăng:
 
 ---
 
-## 5. Hai Cơ Chế Deduplicate Phân Biệt
+## 6. Tất Cả Các Lớp Chống Trùng Trong Hệ Thống
 
-| | Deduplicator (Phase 2) | Fingerprint Suppression (Phase 3) |
-|:---|:---|:---|
-| **Vị trí** | Trước khi rank | Trong khi rank |
-| **Mục đích** | Gom bài cùng sự kiện trong batch | Phạt bài về topic vừa đăng |
-| **Window** | 48h (cross-session) | 60 phút |
-| **Cơ chế** | EnhancedSimilarity (0.38) | Fingerprint string match |
-| **Kết quả** | Loại bỏ bài → giảm số lượng | Nhân ×0.1 → giảm điểm |
-
-Ngoài ra, **Selector (Phase 4)** có thêm **Topic Novelty Penalty**:
-```
-Nếu 2 bài trong cùng batch có topic trùng → bài xếp sau × 0.4
-```
+| Lớp | Phase | Cơ chế | Window | Kết quả |
+|:---|:---|:---|:---|:---|
+| **In-batch Clustering** | Phase 2 | EnhancedSimilarity ≥ 0.38 | Cùng batch | DROP + tăng cluster_size |
+| **Cross-session Dedup** | Phase 2 | EnhancedSimilarity ≥ 0.38 | 48h | DROP (không tăng cluster_size) |
+| **Fingerprint Suppression** | Phase 3 | Exact fingerprint match | 60 phút | Nhân ×0.1 điểm |
+| **Entity Fatigue** | Phase 3 | Đếm entity đã POSTED | 24h | Nhân ×0.8/0.6/0.4... theo tần suất |
+| **Topic Novelty Penalty** | Phase 4 | Jaccard ≥ 0.38 giữa bài đã chọn | Cùng batch | Nhân ×0.4 điểm |
 
 ---
 
-## 6. Ví Dụ Đầy Đủ
+## 7. Ví Dụ Đầy Đủ
 
-### Ví dụ 1 — In-batch clustering: 2 bài cùng sự kiện ✅
+### Ví dụ 1 — In-batch clustering + Trend Bonus ✅
 
 ```
-Batch đầu vào:
+Batch đầu vào (1 cycle):
   A: "SEC drops lawsuit against Coinbase" (CoinDesk)
   B: "U.S. Regulator Drops Charges Against Coinbase" (CryptoSlate)
+  C: "SEC Coinbase case officially dismissed" (TheBlock)
 
 Vòng lặp:
-  → A: unique_articles trống → không match ai → A trở thành Lead, cluster_size=1
-  → B: so sánh với A:
-       ents_A = {"sec", "coinbase"}
-       ents_B = {"coinbase", "charges"}   (U.S. Regulator → "us regulator" → sec qua normalize_phrase)
-             → thực ra: ents_B = {"coinbase", "sec", "charges"}
-       entity_sim = 2/min(2,3) = 1.0
-       jaccard(tokens_A, tokens_B) ≈ 0.43
-       score = 0.6×1.0 + 0.4×0.43 = 0.77 ≥ 0.38
-  → B bị SKIP, A.cluster_size = 2
+  → A: unique_articles trống → A trở thành Lead, cluster_size=1
+  → B: sim(B,A) = 0.77 ≥ 0.38 → SKIP, A.cluster_size = 2
+  → C: sim(C,A) = 0.72 ≥ 0.38 → SKIP, A.cluster_size = 3
 
-Output: [A] với cluster_size=2 → Trend Bonus = +1.0 trong rank
+Output Phase 2: [A] với cluster_size = 3
+
+Phase 3 (Rank):
+  trend_bonus = (3-1) × 1.0 = +2.0 điểm → A được boost
 ```
 
----
-
-### Ví dụ 2 — Cross-session dedup: tin đã đưa 20h trước ✅
+### Ví dụ 2 — Cross-session dedup: bài đến ở cycle sau → DROP ✅
 
 ```
-DB (recent_articles): Bài "SEC vs Coinbase ruling" từ 20h trước
+DB (recent_articles): Bài "SEC vs Coinbase ruling" từ 20h trước (đã POSTED)
 
 Batch hôm nay:
   C: "Court confirms SEC dismissal of Coinbase case"
 
-Vòng lặp:
-  → C: so sánh với unique_articles (trống) → không match
-  → Cross-session: so sánh với DB article "SEC vs Coinbase ruling":
-       entity_sim: {"coinbase", "sec"} vs {"coinbase", "court", "sec"} = 1.0
-       score = 0.6×1.0 + 0.4×jaccard ≈ 0.7 ≥ 0.38
-  → C bị SKIP (đã đưa tin sự kiện này trong 48h qua)
+→ Cross-session: sim(C, DB_article) = 0.70 ≥ 0.38
+→ C bị SKIP (đã đưa tin sự kiện này trong 48h)
+→ cluster_size của bài cũ KHÔNG thay đổi (đã đóng băng)
 ```
-
----
 
 ### Ví dụ 3 — Bài mới khác chủ đề, được giữ ✅
 
@@ -209,17 +264,13 @@ unique_articles đã có: "SEC drops lawsuit against Coinbase"
 Bài mới:
   D: "Binance launches new staking product for BNB"
 
-So sánh:
   ents_A = {"coinbase", "sec"}
-  ents_D = {"binance", "bnb→binance"}  → {"binance"}
-  entity_sim = 0/min(2,1) = 0.0
-  jaccard("sec drops lawsuit coinbase", "binance launches staking bnb") ≈ 0.0
+  ents_D = {"binance", "bnb→binance"} → {"binance"}
+  entity_sim = 0/max(2,1) = 0.0
   score = 0.6×0.0 + 0.4×0.0 = 0.0 < 0.38
 
-→ D được giữ lại → trở thành Lead Article mới
+→ D được giữ lại → trở thành Lead Article mới, cluster_size=1
 ```
-
----
 
 ### Ví dụ 4 — Narrative Continuity: follow-up article ✅
 
@@ -234,37 +285,44 @@ Batch hôm nay:
 BƯỚC 1: Không match bài nào trong batch hiện tại
 BƯỚC 2: Cross-session (48h window): "3 ngày" vượt quá 48h → không xét
 BƯỚC 3: Narrative Continuity (5 ngày, threshold 0.25):
-  ents giữa E và DB article:
   entity_sim ("david sacks" vs "david sacks", "white house" vs "white house") = 1.0
-  score = 0.6×1.0 + ... ≥ 0.25
+  score ≥ 0.25
   → root_id = "evt_abc123" (kế thừa từ sự kiện cũ)
 
 → E được giữ lại, gắn event_root_id = "evt_abc123"
-  (Thể hiện đây là tin tiếp theo của cùng câu chuyện David Sacks)
+```
+
+### Ví dụ 5 — Giới hạn detection: cùng sự kiện, khác góc nhìn ⚠️
+
+```
+Cycle 1 (7:00) — POSTED:
+  A: "Solana Drift's IOU Airdrop Plan Sparks Doubts After $285M Hack"
+
+Cycle 2 (9:00) — Bài mới:
+  B: "'Terrifying': Solana Founder Reacts to One of Biggest DeFi Hacks"
+
+Cross-session check:
+  ents_A = {"solana", "drift"}
+  ents_B = {"solana"}
+  entity_sim = 1/max(2,1) = 0.5
+  
+  tokens_A = {"solana", "drift", "iou", "airdrop", "plan", "sparks", "doubts", "285m", "hack"}
+  tokens_B = {"terrifying", "solana", "founder", "reacts", "one", "biggest", "defi", "hacks", "history"}
+  jaccard ≈ 0.07  (chỉ trùng "solana")
+  
+  score = 0.6×0.5 + 0.4×0.07 = 0.33 < 0.38
+
+→ B KHÔNG bị bắt bởi dedup (dưới threshold)
+→ B qua rank → đăng → 2 bài cùng vụ Drift hack xuất hiện trên channel
+
+Nguyên nhân: 2 bài cùng sự kiện nhưng góc nhìn quá khác → entity overlap
+thấp (chỉ "solana"), token overlap gần như bằng 0.
+Đây là giới hạn của text-based similarity, không phải lỗi logic.
 ```
 
 ---
 
-### Ví dụ 5 — False positive được xử lý đúng ✅
-
-```
-Hai bài về entity khác nhau nhưng dùng từ giống:
-  F: "Binance launches new product"
-  G: "Coinbase launches new product"
-
-  ents_F = {"binance"}
-  ents_G = {"coinbase"}
-  entity_sim = 0/min(1,1) = 0.0
-  jaccard = {"launches", "new", "product"}/union ≈ 0.60
-
-  score = 0.6×0.0 + 0.4×0.60 = 0.24 < 0.38
-
-→ G được giữ lại (không bị nhầm là duplicate của F) ✅
-```
-
----
-
-## 7. Tuning Parameters (config.py — DEDUP_CONFIG)
+## 8. Tuning Parameters (config.py — DEDUP_CONFIG)
 
 ```python
 DEDUP_CONFIG = {
@@ -296,7 +354,7 @@ DEDUP_CONFIG = {
 
 ---
 
-## 8. Debug Log
+## 9. Debug Log
 
 Khi bật `logging.DEBUG` cho module `modules.deduplicator`:
 
