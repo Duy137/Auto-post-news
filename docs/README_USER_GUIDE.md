@@ -1,161 +1,180 @@
-# 🤖 Hướng Dẫn Sử Dụng Bot Điểm Báo AI Đa Luồng (Dual-Lane)
+# 🤖 Hướng Dẫn Sử Dụng Bot Điểm Báo AI (V5.1)
 
-Chào mừng bạn! Đây là hệ thống **Biên tập viên AI** chuyên nghiệp, tự động săn tìm tin tức nóng hổi, dùng Trí Tuệ Nhân Tạo (Gemini/OpenAI) để tóm tắt thông minh và đăng bài tự động lên các mạng xã hội (Twitter/X, Telegram, Facebook) của bạn 24/7.
+Chào mừng bạn! Đây là hệ thống **Biên tập viên AI** chuyên nghiệp, tự động săn tìm tin tức nóng hổi, dùng Trí Tuệ Nhân Tạo (Gemini) để tóm tắt thông minh và đăng bài tự động lên các mạng xã hội (Telegram, Twitter/X, Facebook) 24/7.
 
-Hệ thống hoạt động với sức mạnh **"Đa Luồng" (Dual-Lane)** và lưu trữ trạng thái tuyệt đối an toàn trên **SQLite**, không còn sử dụng file JSON thủ công:
-1. **Luồng RSS (Báo Phân Tích):** Rà quét các trang báo định kỳ (vd: mỗi 15 phút), tự chấm điểm độ nóng của tin qua bộ lọc V3 chuyên diệt rác đầu cơ, gạn lọc tin trùng bằng Idempotency Guard, và chọn ra tin hay nhất để tóm tắt và đăng.
-2. **Luồng Express (Tin Cực Nhanh):** Cắm trực tiếp vào ứng dụng Telegram của bạn để nghe lóng một kênh tin tức khẩn cấp. Vừa có tin "Break" là AI lập tức xào nấu và phóng lên mọi mặt trận.
-
-File này được viết siêu đơn giản để **ai chưa từng lập trình cũng có thể làm được**. Hãy làm theo từng bước nhé!
+Hệ thống hoạt động với **3 vòng lặp song song**:
+1. **Content Pipeline (Kho Bài):** Rà quét RSS → Chấm điểm → Tóm tắt → Lưu vào kho bài sẵn sàng.
+2. **Platform Publisher (Đăng Bài):** Check timing từng nền tảng → Lấy bài tốt nhất từ kho → Đăng.
+3. **Express Lane (Tin Cực Nhanh):** Nghe lỏng Telegram → Có tin Break → AI tóm tắt → Đăng ngay.
 
 ---
 
 ## 🛠️ PHẦN 1: CÁC BƯỚC CÀI ĐẶT LẦN ĐẦU
-Chỉ cần làm một lần duy nhất lúc mới đem Bot về máy.
 
 ### Bước 1: Cài đặt phần mềm nền tảng
-1. Tải và cài đặt **Python** (Bản 3.10 trở lên) tại trang chủ `python.org`.
-   > **Lưu ý CỰC KỲ QUAN TRỌNG:** Lúc cài đặt, ở màn hình đầu tiên, nhớ tích dấu tick ✔️ vào ô `"Add Python to PATH"` ở dưới cùng.
-2. Tải toàn bộ mã nguồn Bot này về máy, giải nén vào một thư mục (Ví dụ: `D:\Auto post news`).
+1. Tải và cài đặt **Python** (Bản 3.10 trở lên) tại `python.org`.
+   > **Lưu ý QUAN TRỌNG:** Khi cài đặt, nhớ tích ✔️ `"Add Python to PATH"`.
+2. Tải mã nguồn Bot về máy, giải nén vào thư mục (Ví dụ: `D:\Auto post news`).
 
 ### Bước 2: Cài đồ nghề cho Bot
-1. Mở cửa sổ Terminal (hoặc Command Prompt / PowerShell) lên.
-2. Diễu hành đến thư mục chứa Bot bằng lệnh `cd "D:\Auto post news"` (Thay bằng đường dẫn của bạn).
-3. Gõ lệnh sau rồi bấm Enter, máy tính sẽ tự động cắm rễ các thư viện cần thiết:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(Nếu bị lỗi lệnh pip, hãy thử: `python -m pip install -r requirements.txt`)*
+```bash
+cd "D:\Auto post news"
+pip install -r requirements.txt
+```
 
 ---
 
-## 🔑 PHẦN 2: CHÌA KHÓA VÀ CẤU HÌNH BẢO MẬT (`.env`)
+## 🔑 PHẦN 2: CẤU HÌNH BẢO MẬT (`.env`)
 
-Bot cần các loại chìa khóa để chạy: Bộ não AI, Quyền đăng bài Mạng Xã Hội, và Cổng nghe tin Telegram.
-Hãy **TẠO MỘT TỆP MỚI** ngay trong thư mục Bot, đặt tên chính xác là `.env` (chú ý có dấu chấm ở đầu). Mở nó lên bằng Notepad và điền vào các thông tin sau:
-
-*(Tuyệt đối giữ bí mật file `.env` này!)*
+Tạo file `.env` ngay trong thư mục Bot:
 
 ```env
-# ----- 1. CHÌA KHÓA BỘ NÃO AI -----
-# (Bắt buộc phải có 1 trong 2)
+# ----- 1. BỘ NÃO AI -----
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=điền_key_gemini_vào_đây
-OPENAI_API_KEY=điền_key_openai_vào_đây_nếu_có
 
-# ----- 2. CHÌA KHÓA MẠNG XÃ HỘI (Nơi Đăng) -----
+# ----- 2. NỀN TẢNG ĐĂNG BÀI -----
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=8769006...
+TELEGRAM_CHAT_ID=-100123...
+
 # Twitter / X
 TWITTER_API_KEY=
 TWITTER_API_SECRET=
 TWITTER_ACCESS_TOKEN=
 TWITTER_ACCESS_SECRET=
 
-# Telegram Bot (Gửi tin vào Group/Channel của bạn)
-TELEGRAM_BOT_TOKEN=8769006...
-TELEGRAM_CHAT_ID=-100123...
-
 # Facebook Fanpage
 FACEBOOK_PAGE_ACCESS_TOKEN=
 FACEBOOK_PAGE_ID=
 
-# ----- 3. CỔNG NGHE LÓNG TELEGRAM (Dành cho Express Lane cực nhanh) -----
-# Lấy api_id và api_hash tại: https://my.telegram.org/
-TG_API_ID=điền_số_ID_vào_đây (vd: 1234567)
-TG_API_HASH=điền_chuỗi_hash_vào_đây
+# ----- 3. CỔNG NGHE LỎNG TELEGRAM (Express Lane) -----
+TG_API_ID=1234567
+TG_API_HASH=điền_chuỗi_hash
 TG_PHONE=+8498xxxxxxx
-# Kênh nguồn muốn theo dõi (Vd: @Coin369, hoặc ID băng số định dạng)
 TG_SOURCE_CHANNEL=@KenhTinNhanhCuaBan
 
-# ----- 4. HỆ THỐNG ĐIỀU KHIỂN CHÍNH (Tùy Chọn) -----
-# Bạn có thể đổi chữ True thành False để tắt luồng tương ứng
+# ----- 4. CÔNG TẮC CHÍNH -----
 RSS_ENABLED=True
 EXPRESS_ENABLED=True
-FINGERPRINT_WINDOW_MINUTES=60
-EXPRESS_THROTTLE_MINUTES=3
-```
 
-**Mẹo tìm chìa khóa dễ dàng:**
-- **Gemini (Miễn phí):** Vào `aistudio.google.com/app/apikey` tạo 1 key. Nhanh gọn nhẹ.
-- **Telegram Bot:** Chat với `@BotFather` trên Telegram để tạo Bot lấy Token. Sau đó thêm Bot vào Group của bạn. Tìm con bot `@RawDataBot` gõ lệnh để lấy Chat ID nhóm.
-- **Telegram Express ID (Nghe lóng):** Đăng nhập số điện thoại của bạn vào `my.telegram.org`, chọn "API development tools" để lấy `TG_API_ID` và `TG_API_HASH`.
+# ----- 5. PER-PLATFORM TIMING (V5.0) -----
+# Content Pipeline quét RSS mỗi N phút
+CONTENT_PIPELINE_INTERVAL=30
+
+# Publisher check timing mỗi N phút
+PUBLISH_CHECK_INTERVAL=5
+
+# Bài quá N giờ → expired, không đăng
+QUEUE_MAX_AGE_HOURS=6
+
+# Telegram: check khoảng cách bài cuối ≥ 4 giờ mới đăng tiếp
+TG_PUBLISH_MODE=gap
+TG_MIN_GAP_HOURS=4
+TG_GAP_CHANNEL_ID=@your_channel
+
+# Twitter: đăng theo khung giờ cố định
+TW_PUBLISH_MODE=scheduled
+TW_SCHEDULE=07:00,11:00,15:00,18:00,21:00,00:00
+
+# Facebook: cách đều mỗi 6 giờ
+FB_PUBLISH_MODE=interval
+FB_INTERVAL_HOURS=6
+```
 
 ---
 
-## 🚀 PHẦN 3: BẬT NGUỒN VÀ LÁI BOT THỰC TẾ
+## 🚀 PHẦN 3: BẬT NGUỒN VÀ LÁI BOT
 
-Trước khi chạy thật, bạn nên mở file `config.py` bằng Notepad lướt qua để kiểm soát luật chơi:
-
-### Bật / Tắt các Nền Tảng Đăng Bài (Luồng Nào Đăng Kênh Nào?)
-Mở tệp `config.py` bằng Notepad, tìm đến mục `PLATFORM_MAPPING`. Đây là nơi phân luồng siêu cấp! Bạn quy định luồng tin khẩn cấp (EXPRESS) hoặc báo mạng (RSS) được phép đăng lên đâu.
-
-Ví dụ dưới đây, Express (Tin Telegram siêu tốc) sẽ chỉ bắn sang nhóm Telegram của bạn. Còn RSS (tin mạng chậm) thì được đăng ở cả Telegram lẫn Twitter/X:
+### Bật / Tắt nền tảng đăng bài
+Mở `config.py`, tìm `PLATFORM_MAPPING`:
 
 ```python
-# --- CÔNG TẮC ĐIỀU KHIỂN NỀN TẢNG (PLATFORM MAPPING) ---
 PLATFORM_MAPPING = {
     "EXPRESS": ["telegram"],
-    "RSS": ["telegram", "twitter"]  # Có thể đổi mảng rỗng [] để tắt
+    "RSS": ["telegram"]     # Thêm "twitter", "facebook" nếu cần
 }
 ```
 
-### 2. Chế Độ Nháp "Bắn Chỉ Thiên" (Cực kỳ khuyên dùng lần đầu)
-Tìm mục `TWITTER_CONFIG`. 
-Chỉnh dòng `"dry_run": False,` thành `"dry_run": True,`. 
-Khi bật `True`, Bot chạy y như thật, đọc tin, sinh bài AI, nhưng tới lúc đăng lên MXH thì nó chỉ **IN RA MÀN HÌNH** cho bạn chấm điểm xem hay không chứ không đăng lên mạng. 
+### Chế độ nháp "Bắn Chỉ Thiên"
+Mở `config.py`, tìm `TWITTER_CONFIG`:
+```python
+"dry_run": True   # True = chỉ in ra, không đăng lên mạng
+```
 
-### 3. Khởi Chạy Bộ Ngắt Động Cơ
-Mở Terminal ở thư mục bot, gõ lịnh quyền lực nhất:
-
+### Khởi chạy
 ```bash
 python main.py
 ```
 
-**Thế là xong! Mọi thứ diễn ra tự động:**
-1. Màn hình sẽ chẻ làm 2 luồng. **Express Listener** màu xanh lóe lên kết nối thẳng vào luồng chat Telegram của bạn. Chờ đợi tin giật gân. *(Lần chạy đầu tiên, màn hình đen có thể sẽ hỏi Mã Code Telegram gửi về điện thoại, hãy nhập vào)*.
-2. **RSS Lane** chạy 15 phút 1 lần. Đọc báo -> Diệt tin trùng -> Xếp hạng điểm -> Lấy tin cao nhất nhờ AI tóm tắt -> Đăng!
-3. 🔥 **Siêu Năng Lực Hot-Reload:** Bạn đang bật Bot nhưng thấy nó post nhanh quá? Cứ việc ở ngoài Notepad sửa file `.env` (vd: `RSS_ENABLED=False`) rồi ấn SAVE. Ngôi sao kíp nổ của Bot sẽ tự nhận diện thiết đặt mới ngay lập tức mà **Không Cần Khởi Động Lại!**
+**Thế là xong!** Hệ thống tự chạy 3 vòng lặp song song:
+- **Content Pipeline** — quét RSS mỗi 30 phút, chuẩn bị bài vào kho
+- **Platform Publisher** — mỗi 5 phút check xem platform nào đến giờ đăng
+- **Express Listener** — luôn lắng nghe Telegram, có tin break → đăng ngay
+
+🔥 **Hot-Reload:** Sửa `.env` → Bot tự nhận diện mà không cần restart!
 
 ---
 
-## ⚙️ PHẦN 4: NGHỆ THUẬT ĐỘ BOT (DÀNH CHO CHỦ TỌA BIÊN TẬP)
+## ⚙️ PHẦN 4: TÙY CHỈNH BOT
 
-Sự thông minh của Bot nằm ở file `config.py`. Bạn hoàn toàn được phép sửa chữ ở các vùng sau:
+### 1. Chế Độ Timing Từng Platform (V5.0)
 
-### 1. Dạy Bot bắt "Từ Khóa Vàng" (Mục `SCORING_WEIGHTS` trong `config.py`)
-Hãy định nghĩa lại thế giới quan của Bot:
-- **`keyword_categories`**: Đây là rổ từ khóa. V3 chia thành các rổ cực kỳ chuyên biệt:
-  - `priority_event`: Sự kiện thao túng thị trường (SEC, Hack, Halted Withdrawals). Lọt rổ này thì bài viết chắc chắn bay thẳng lên top!
-  - `market_moving`: Các tin tức cốt lõi (Listing, Funding, Integration).
-  - `price_analysis`: Rổ "Tội phạm". Chỗ chứa các từ "analyst predicts", "rally", "surge". Gặp từ này điểm sẽ bị dìm cực mạnh (-18.0) trừ khi đang kết hợp với sự kiện thật (Context Filter).
-- **Hard Reject `SPECULATION_HARD_REJECT_PATTERN`**: Bot bắn bỏ không thương tiếc các tựa bài chứa "price target" hay "price prediction" mà không thèm chấm.
-- **`CAPITAL_FLOW_REGEX`** (Bắt cá voi): Bất cứ tin tức nào chứa "$50M", "10,000 ETH" sẽ được cộng điểm thưởng dòng vốn ngay lập tức.
-- **`major_tokens` / `major_exchanges`**: Đây là bộ lọc Token-Aware (Siêu Tính Năng). Nếu bài báo có nhắc đến tên Token/Sàn ở đây, *CỘNG THÊM* từ khóa Market Moving -> *Cộng ngay Thưởng*. Ngược lại, Tên Token *CỘNG THÊM* bài viết sặc mùi Đầu cơ phân tích chiều giá -> *Nện ngay hình phạt -12.0 Soft Penalty*.
+| Mode | Mô tả | Dùng khi |
+|:---|:---|:---|
+| `gap` | Check bài cuối trên channel, đợi đủ N giờ mới đăng tiếp | Telegram — tránh spam channel |
+| `scheduled` | Đăng đúng khung giờ cố định (±5 phút) | Twitter/X — nội dung ổn định |
+| `interval` | Cách đều N giờ kể từ lần đăng trước | Facebook — đều đặn |
 
-### 2. Định Hình Nét Chữ AI (Mục `PROMPT_TEMPLATES`)
-Hệ thống nay đã chia làm 2 bộ não: Não tin hỏa tốc (EXPRESS) và Não tin sâu (RSS). Bạn có thể đổi văn phong từng não riêng biệt:
+Điều chỉnh trong `.env` hoặc trực tiếp default trong `config.py` (dòng 77-97).
 
-Trong `config.py`, tìm mảng `PROMPT_TEMPLATES`.
-- Bạn muốn tin mạng (RSS) nghiêm túc? Đừng sửa phần của "RSS".
-- Bạn muốn tin chớp nhoáng từ Telegram (EXPRESS) nghe hoảng hốt, cấp bách? Hãy thay đổi phần "EXPRESS":
+### 2. Keyword Scoring (Mục `SCORING_WEIGHTS` trong `config.py`)
+- **`keyword_categories`**: Các rổ từ khóa quyết định điểm bài viết
+- **`major_tokens` / `major_exchanges` / `macro_entities`**: Entity lists — bài có entity ở đây được cộng điểm thưởng
+- **`min_publish_score = 5.0`**: Ngưỡng tối thiểu để bài được đăng
 
-```python
-"EXPRESS": (
-    "Bạn là một Admin Channel siêu cháy. Hãy viết tin Break siêu giật gân, dùng cực nhiều icon lửa cháy 🚨🔥, cảnh báo fomo ngay! Kết bài kêu hashtag #GOGOGO"
-),
-```
+### 3. Entity Fatigue (V5.1)
+Bot tự động phạt bài khi cùng 1 chủ đề/entity được đăng quá nhiều trong 24h:
+- Lần 2: ×0.8 điểm
+- Lần 3: ×0.6 điểm
+- Lần 5+: ×0.0 (bỏ hẳn)
 
-Thế là ra siêu phẩm! Điểm mạnh là RSS vẫn giữ nguyên vẻ điềm đạm, chỉ dòng tin Express là hóa điên!
+Cơ chế này dùng `extract_fingerprints()` để detect MỌI entity tự động, không cần config thủ công.
 
-### 3. Nạp Thêm Nguồn Báo Tùy Thích (Mục `RSS_SOURCES`)
-Sửa hoặc copy dán thêm các Rss feed mới:
+### 4. Prompt AI (Mục `PROMPT_TEMPLATES`)
+Tùy chỉnh văn phong riêng cho mỗi luồng:
+- **RSS**: Phong cách nghiêm túc, chuyên nghiệp
+- **EXPRESS**: Phong cách khẩn cấp, nhanh gọn
+
+### 5. Nạp Thêm Nguồn Báo (Mục `RSS_SOURCES`)
 ```python
 {
-    "id": "cafef_taichinh",             
-    "name": "CafeF Tài Chính",          
-    "url": "https://cafef.vn/tai-chinh.rss",  
-    "credibility_score": 1.2, # Hệ số tin cậy. Nếu báo này xịn, cho nó 1.5. Nếu báo hay câu view, cho 0.8 để dìm điểm nó xuống!
-    "latency_advantage_score": 1.0     
+    "id": "source_id",
+    "name": "Tên Nguồn",
+    "url": "https://example.com/rss",
+    "credibility_score": 1.1,     # 1.0 = bình thường, >1.0 = tin cậy hơn
+    "latency_advantage_score": 1.0
 }
 ```
 
-Chúc bạn sở hữu cỗ máy hút Tráfico tự động bá đạo nhất MXH! 🚀
+---
+
+## 📋 PHẦN 5: CẤU TRÚC THƯ MỤC
+
+```
+Auto post news/
+├── main.py                    ← Điểm khởi chạy chính
+├── config.py                  ← Toàn bộ cấu hình
+├── .env                       ← API Keys + biến điều khiển
+├── requirements.txt           ← Thư viện cần cài
+├── Procfile                   ← Railway worker config
+├── modules/
+│   ├── state_manager.py       ← Database SQLite
+│   ├── pipeline/              ← RSS: collector → dedup → rank → selector → summarize
+│   ├── express/               ← Express: listener → filter → fingerprint
+│   └── publishing/            ← Publisher: publisher + timing + telethon_client
+├── data/                      ← Database file (auto-generated)
+└── docs/                      ← Tài liệu
+```
+
+Chúc bạn sở hữu cỗ máy tin tức AI tự động bá đạo nhất! 🚀

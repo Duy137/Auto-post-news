@@ -1,117 +1,144 @@
-# PROJECT_SNAPSHOT: AI News Auto Post Bot (V4.5 Entity-Aware Architecture)
+# PROJECT_SNAPSHOT: AI News Auto Post Bot (V5.1 — Per-Platform Timer Architecture)
 
 > **AI INSTRUCTION: When starting a new chat, read this file carefully. It contains the absolute source of truth for the entire system architecture, state management, scoring logic, and edge case handling.**
 
 ## 1. System Overview
-A production-grade, automated bot that operates on a **Dual-Lane architecture**:
-- **Express Lane (Event-Driven):** Captures breaking news from Telegram, deduplicates via macro-entity fingerprinting (10-min window), processes it rapidly, and publishes immediately.
-- **RSS Lane (Interval-Driven):** Aggregates crypto/macro news via RSS feeds, evaluates and ranks articles using the V4.5 Entity-Aware Deterministic Ranking Engine, and publishes only articles that exceed `min_publish_score = 5.0`.
+A production-grade, automated bot that operates on a **Dual-Lane architecture** with a **decoupled pipeline**:
+- **Content Pipeline (Async Task 1):** Quét RSS → Dedup → Rank → Select → Summarize → Lưu vào `publish_queue` (kho bài). KHÔNG đăng bài trực tiếp.
+- **Platform Publisher (Async Task 2):** Mỗi vài phút check timing rule từng platform (gap / scheduled / interval). Nếu đến giờ → lấy bài tốt nhất từ kho → đăng lên platform đó.
+- **Express Lane (Async Task 3, Event-Driven):** Captures breaking news từ Telegram → dedup → summarize → đăng ngay lập tức.
 
 LLM Provider: **Gemini** (primary) with Gemma fallback. Content is rewritten in Vietnamese.
 
-## 2. Global State & Idempotency Design (CRITICAL)
+## 2. Module Structure (V5.0)
+
+```
+Auto post news/
+├── main.py                          ← Async orchestrator (3 tasks)
+├── config.py                        ← Central config + hot-reload
+├── models.py                        ← TypedDict definitions
+├── modules/
+│   ├── __init__.py
+│   ├── state_manager.py             ← SQLite DB, queue CRUD, maintenance
+│   ├── pipeline/                    ← RSS Pipeline Core
+│   │   ├── collector.py             ← RSS fetcher (network-hardened)
+│   │   ├── deduplicator.py          ← In-batch clustering + cross-session dedup
+│   │   ├── rank.py                  ← V5.1 Ranking Engine (Entity Fatigue mở rộng)
+│   │   ├── selector.py              ← Min score filter + topic novelty
+│   │   └── summarize.py             ← LLM call with key rotation + model fallback
+│   ├── express/                     ← Express Lane
+│   │   ├── listener.py              ← Telethon-based breaking news listener
+│   │   ├── filter.py                ← Keyword score filter
+│   │   └── fingerprint.py           ← Entity extraction (proper nouns, $TOKEN, CAPS)
+│   └── publishing/                  ← Per-Platform Publisher
+│       ├── publisher.py             ← Multi-platform posting with idempotency guard
+│       ├── timing.py                ← Per-platform timing logic (gap/scheduled/interval)
+│       └── telethon_client.py       ← Shared Telethon singleton
+```
+
+## 3. Global State & Idempotency Design (CRITICAL)
 **SQLite (`data/article_state.db`) is the Absolute Single Source of Truth.** No JSON files.
 
 ### A. Publisher Guard (Ultimate Idempotency Layer)
 - **Table:** `published_events`
-- **Logic:** Publisher checks this table *before* the API call. If `event_fp` exists, returns `is_duplicate=True` and skips. The article is marked `POSTED` without incrementing the publish counter.
+- **Logic:** Publisher checks this table *before* the API call. If `event_fp` exists for platform, returns `is_duplicate=True` and skips.
 
 ### B. Fingerprint Cooldown (Cross-Lane Suppression)
 - **Table:** `recent_topics`
-- **Window:** `fingerprint_window_minutes = 10` (default, configurable)
+- **Window:** `fingerprint_window_minutes = 60` (default, configurable)
 - **Logic:** Express lane logs fingerprints on publish. RSS lane applies `rss_penalty_multiplier = 0.1×` to articles matching a recent topic fingerprint within the window.
 
-## 3. Dual-Lane Pipeline Flow
+### C. Publish Queue (V5.0 — Per-Platform)
+- **Table:** `publish_queue` — bài đã summarize, pre-formatted cho từng platform
+- **Table:** `platform_publish_log` — log thời gian đăng mỗi platform (cho timing check)
 
-### RSS Lane
-1. **Collect** → `modules/collector.py` — Network-hardened RSS fetcher (max 20 items/feed)
-2. **Deduplicate** → Hard URL/GUID dedup via `rss_items` SQLite table
-3. **Rank** → V4.5 Deterministic Ranking Engine (`modules/rank.py`)
-4. **Select** → Filters articles with `score >= min_publish_score (5.0)`, then picks top candidates (`modules/selector.py`)
-5. **Summarize** → Gemini (Flash → Gemma fallback, 30s timeout, 500 max_tokens) rewrites in Vietnamese bullet format
-6. **Publish** → Pushes to platforms in `PLATFORM_MAPPING["RSS"]`. Checks Idempotency Guard first.
+## 4. Pipeline Flow
 
-### Express Lane
+### Content Pipeline (Task 1) — Chạy mỗi 30 phút (configurable)
+1. **Collect** → `pipeline/collector.py` — Network-hardened RSS fetcher (max 20 items/feed)
+2. **Deduplicate** → EnhancedSimilarity (entity 0.6 + token 0.4, threshold 0.38)
+3. **Rank** → V5.1 Ranking Engine với Entity Fatigue mở rộng
+4. **Select** → Filters articles with `score >= min_publish_score (5.0)`, top 1
+5. **Summarize** → LLM rewrite in Vietnamese + Polish step (Gemma, temp=0)
+6. **Queue** → `build_content()` format cho 3 platform → `insert_to_publish_queue()`
+
+### Platform Publisher (Task 2) — Check mỗi 5 phút (configurable)
+1. **Check Timing** → `timing.should_publish_now(platform)` — async, per-platform
+2. **Pick Best** → `pick_best_from_queue(platform)` — bài READY, chưa expired, chưa đăng platform này, adjusted_score cao nhất
+3. **Publish** → `publish_single_from_queue()` → idempotency check → API call → mark published
+
+### Express Lane (Task 3) — Event-Driven
 1. **Listen** → Telethon listener detects `🔴` messages in source Telegram channel
 2. **Hard Dedup** → 24h hash window blocks exact message repeats
 3. **Keyword Filter** → `EXPRESS_FILTER_KEYWORDS` score threshold (min 15.0)
-4. **Fingerprint Dedup** → 10-minute entity-level window
+4. **Fingerprint Dedup** → configurable window (default 60 min)
 5. **Throttle** → Min 3-minute gap between consecutive posts
-6. **Summarize & Publish** → Gemma (30s timeout), compact 1-2 sentence format with IMPACT field
+6. **Summarize & Publish** → LLM rewrite → publish immediately
 
-## 4. The Ranking Engine (V4.5 Entity-Aware Logic)
+## 5. Per-Platform Timing Modes (V5.0)
 
-Full detail in `docs/ranking_engine_documentation.md`. Summary:
+| Mode | Mô tả | Config Keys |
+|:---|:---|:---|
+| `gap` | Check khoảng cách bài cuối trên channel. Telegram dùng Telethon API, fallback DB | `min_gap_hours`, `gap_channel_id` |
+| `scheduled` | Đăng đúng giờ cố định (±5 phút tolerance) | `schedule` (list "HH:MM") |
+| `interval` | Cách đều N giờ kể từ lần đăng trước | `interval_hours` |
+
+Mỗi platform config riêng trong `ORCHESTRATION_CONFIG["platform_timing"]`.
+
+## 6. Ranking Engine (V5.1)
 
 ### Core Formula
 ```
-Total Score = (Editorial_Score + Entity_Bonus + Trend_Bonus + Capital_Flow_Bonus)
-              × Source_Multiplier × Time_Decay × Topic_Novelty_Penalty
+Noise_Adjusted_Positive = (Base + Keyword_Bucket + Capital_Flow) × Noise_Multiplier
+Editorial_Score         = (Noise_Adjusted_Positive + Penalty_KW + Trend_Bonus) × Source_Credibility
+Final_Score             = Editorial_Score × Time_Decay × Topic_Novelty × Entity_Fatigue
 ```
 
-### Keyword Buckets
-| Bucket | Cap | Key Behavior |
-|:---|:---|:---|
-| `market_moving` | +10.0 | Discrete event signals only. Penalty-immune. |
-| `macro_politics` | +10.0 | Macro/geopolitics. Penalty-immune. |
-| `business_development` | +10.0 | Subject to Asset Tiering penalty |
-| `negative_event` | +10.0 | Subject to Asset Tiering penalty |
-| `major_tech` | +8.0 | Subject to Asset Tiering penalty |
-| `price_analysis` | -18.0 | Penalty bucket. Reduces score. |
+### Entity Fatigue (V5.1 — Mở rộng)
+Dùng `extract_fingerprints()` để detect MỌI entity trong title bài đã POSTED 24h.
+Phạt tuyến tính: lần 1=1.0, lần 2=0.8, lần 3=0.6, lần 4=0.4, lần 5=0.2, lần 6+=0.0.
 
-### Asset Tiering Penalty (V4.4)
-Applied to bucket scores of `business_development`, `negative_event`, `major_tech`:
-- **Standard Tokens** (SOL, XRP, Binance, SEC...): `1.0×` — No penalty
-- **Noise Tokens** (bitcoin, BTC, ethereum, ETH): `0.5×` — 50% penalty on bucket scores
-- **Non-Core/TradFi**: `0.4×` — 60% penalty
+### Keyword Bucket Caps
+| Bucket | Cap | Miễn Asset Penalty? |
+|:---|:---:|:---:|
+| `market_moving` | +4.0 | ✅ |
+| `macro_politics` | +5.0 | ✅ |
+| `business_development` | +8.0 | ❌ |
+| `negative_event` | +8.0 | ❌ |
+| `major_tech` | +3.0 | ❌ |
+| `price_analysis` | -18.0 | — |
 
-**V4.5 Fix — Unconditional Noise Penalty:** After all entity bonuses are summed, if the article ONLY has Noise Tokens (no Standard Tokens), the full `positive_score` is multiplied by `noise_penalty_multiplier (0.5)`. This prevents Entity Bonus (+3) from inflating scores for purely Bitcoin-labeled opinion columns.
-
-### Entity Bonuses (V4.5)
-Independent flat bonuses added after bucket scoring, before Source Multiplier:
-- `major_tokens` present → **+3.0**
-- `major_exchanges` present → **+2.0**
-- `macro_entities` present → **+1.0**
-
-### Min Publish Score (V4.5)
-`min_publish_score = 5.0` — Hard cutoff at Selector phase. Silent if no articles qualify.
-
-### Speculation Guards
-- **Hard Reject**: `price prediction`, `price target`, `forecast $X` → `-999.0` score, instantly dropped
-- **Soft Penalty**: `price_analysis` bucket score (-18.0) + Soft Penalty (-10.0) for token+speculation combo
-
-## 5. LLM Configuration
+## 7. LLM Configuration
 
 ```python
 "lane_models": {
-    "RSS":     ["gemini-2.5-flash", "gemma-3-27b-it"],  # Flash first, Gemma fallback
-    "EXPRESS": ["gemma-3-27b-it"]                        # Fixed, fast model
+    "RSS":     ["gemini-2.5-flash", "gemma-3-27b-it"],
+    "EXPRESS": ["gemma-3-27b-it"]
 }
 "lane_timeouts": { "RSS": 30, "EXPRESS": 30 }
 "max_tokens": 500
 "temperature": 0.3
 ```
 
-Key rotation is implemented at the inner loop level. Model fallback happens when all keys for the current model are exhausted or return FATAL_ERROR (timeout/504).
-
-## 6. Platform Routing
+## 8. Platform Routing
 
 ```python
 PLATFORM_MAPPING = {
     "EXPRESS": ["telegram"],
-    "RSS":     ["telegram"]   # Add "twitter" to enable Twitter posting for RSS
+    "RSS":     ["telegram"]   # Add "twitter", "facebook" to enable
 }
 ```
 
-Twitter `dry_run = True` by default in `TWITTER_CONFIG`. Set to `False` only after verifying dry-run output.
+## 9. Environment Variables (New in V5.0)
 
-## 7. Key Modules
-- `main.py` — Async orchestrator, graceful shutdown, dual-lane concurrency
-- `config.py` — Central config: RSS sources, scoring weights, prompt templates, API keys
-- `modules/rank.py` — V4.5 ranking equation, entity bonuses, noise penalty
-- `modules/selector.py` — Min score filter + topic novelty dedup (Phase 4)
-- `modules/summarize.py` — LLM call with key rotation + model fallback
-- `modules/publisher.py` — Multi-platform posting with idempotency guard
-- `modules/express_listener.py` — Telethon-based breaking news listener
-- `modules/express_fingerprint.py` — Entity extraction for Express dedup
-- `modules/state_manager.py` — SQLite schema, WAL transactions, maintenance sweeps
+| Variable | Default | Mô tả |
+|:---|:---|:---|
+| `CONTENT_PIPELINE_INTERVAL` | 30 | Phút — Content Pipeline quét RSS |
+| `PUBLISH_CHECK_INTERVAL` | 5 | Phút — Publisher check timing |
+| `QUEUE_MAX_AGE_HOURS` | 6 | Giờ — Bài quá cũ bị expired |
+| `TG_PUBLISH_MODE` | gap | Timing mode cho Telegram |
+| `TG_MIN_GAP_HOURS` | 4 | Khoảng cách tối thiểu (gap mode) |
+| `TG_GAP_CHANNEL_ID` | — | Channel ID để Telethon check bài cuối |
+| `TW_PUBLISH_MODE` | scheduled | Timing mode cho Twitter |
+| `TW_SCHEDULE` | 07:00,...,00:00 | Khung giờ đăng Twitter |
+| `FB_PUBLISH_MODE` | interval | Timing mode cho Facebook |
