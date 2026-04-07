@@ -40,7 +40,7 @@ def reload_config():
     ORCHESTRATION_CONFIG["platform_timing"]["facebook"] = {
         "mode": os.environ.get("FB_PUBLISH_MODE", "scheduled"),
         "min_gap_hours": float(os.environ.get("FB_MIN_GAP_HOURS", "4")),
-        "schedule": [t.strip() for t in os.environ.get("FB_SCHEDULE", "").split(",") if t.strip()],
+        "schedule": [t.strip() for t in os.environ.get("FB_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
         "interval_hours": float(os.environ.get("FB_INTERVAL_HOURS", "6")),
     }
     
