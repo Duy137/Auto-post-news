@@ -92,8 +92,8 @@ def build_content(article: Article, platform: str, lane: str = "RSS") -> str:
     elif platform == "facebook":
         if lane == "EXPRESS":
             return f"🚨 {headline}\n\n{summary}{impact_text}"
-        # RSS Default
-        return f"📝 {headline}\n\n{summary}{impact_text}\n\n🔗 {link}"
+        # RSS Default — link hiện qua OG preview card (gửi riêng qua API), không cần inline
+        return f"📝 {headline}\n\n{summary}{impact_text}"
     return fallback
 
 # --- PUBLISHERS PLUGIN REGISTRY ---
@@ -174,8 +174,9 @@ def publish_to_telegram(article: Article, is_dry_run: bool, lane: str = "RSS") -
 
 def publish_to_facebook(article: Article, is_dry_run: bool, lane: str = "RSS") -> PlatformResult:
     content = build_content(article, "facebook", lane)
+    link = article.get("link", "")
     if is_dry_run:
-        logger.info(f"[DRY RUN - FACEBOOK] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
+        logger.info(f"[DRY RUN - FACEBOOK] Would post:\n{'-'*40}\n{content}\nLink: {link}\n{'-'*40}")
         return {"success": True, "post_id": f"mock_fb_{int(time.time())}", "error": None}
         
     page_token = FACEBOOK_CONFIG.get("page_access_token")
@@ -185,6 +186,8 @@ def publish_to_facebook(article: Article, is_dry_run: bool, lane: str = "RSS") -
         
     url = f"https://graph.facebook.com/v19.0/{page_id}/feed"
     payload = {"message": content, "access_token": page_token}
+    if link:
+        payload["link"] = link
     
     try:
         response = requests.post(url, data=payload, timeout=10)
@@ -242,7 +245,7 @@ def publish_single_from_queue(queue_item: dict, platform: str, lane: str = "RSS"
         elif platform == "twitter":
             res = _publish_raw_twitter(content, is_dry_run)
         elif platform == "facebook":
-            res = _publish_raw_facebook(content, is_dry_run)
+            res = _publish_raw_facebook(content, queue_item.get("article_link", ""), is_dry_run)
         else:
             res = publisher_func(article_mock, is_dry_run, lane)
         
@@ -305,10 +308,10 @@ def _publish_raw_twitter(content: str, is_dry_run: bool) -> PlatformResult:
         return {"success": False, "post_id": None, "error": str(e)}
 
 
-def _publish_raw_facebook(content: str, is_dry_run: bool) -> PlatformResult:
-    """Đăng nội dung đã format sẵn lên Facebook."""
+def _publish_raw_facebook(content: str, link: str, is_dry_run: bool) -> PlatformResult:
+    """Đăng nội dung đã format sẵn lên Facebook kèm link preview (OG image)."""
     if is_dry_run:
-        logger.info(f"[DRY RUN - FACEBOOK QUEUE] Would post:\n{'-'*40}\n{content}\n{'-'*40}")
+        logger.info(f"[DRY RUN - FACEBOOK QUEUE] Would post:\n{'-'*40}\n{content}\nLink: {link}\n{'-'*40}")
         return {"success": True, "post_id": f"mock_fb_{int(time.time())}", "error": None}
     
     page_token = FACEBOOK_CONFIG.get("page_access_token")
@@ -317,7 +320,13 @@ def _publish_raw_facebook(content: str, is_dry_run: bool) -> PlatformResult:
         return {"success": False, "post_id": None, "error": "Missing Facebook config"}
     
     url = f"https://graph.facebook.com/v19.0/{page_id}/feed"
-    payload = {"message": content, "access_token": page_token}
+    payload = {
+        "message": content,
+        "access_token": page_token
+    }
+    # Thêm link riêng để Facebook tự tạo preview (OG image + title)
+    if link:
+        payload["link"] = link
     
     try:
         response = requests.post(url, data=payload, timeout=10)

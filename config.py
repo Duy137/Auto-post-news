@@ -5,11 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def reload_config():
-    """Hot-reload variables from .env without restarting."""
+def _reload_orchestration():
+    """Reload ORCHESTRATION_CONFIG từ env vars. Gọi được ngay sau khi ORCHESTRATION_CONFIG khai báo."""
     load_dotenv(override=True)
     
-    # Cập nhật lại các biến môi trường nếu cần
     ORCHESTRATION_CONFIG["rss_enabled"] = os.environ.get("RSS_ENABLED", "True").lower() == "true"
     ORCHESTRATION_CONFIG["express_enabled"] = os.environ.get("EXPRESS_ENABLED", "True").lower() == "true"
     ORCHESTRATION_CONFIG["fingerprint_window_minutes"] = int(os.environ.get("FINGERPRINT_WINDOW_MINUTES", "60"))
@@ -18,12 +17,11 @@ def reload_config():
     ORCHESTRATION_CONFIG["express_retry_attempts"] = int(os.environ.get("EXPRESS_RETRY_ATTEMPTS", "2"))
     ORCHESTRATION_CONFIG["express_retry_backoff_sec"] = int(os.environ.get("EXPRESS_RETRY_BACKOFF_SEC", "30"))
     
-    # V5.0: Reload per-platform timing
     ORCHESTRATION_CONFIG["content_pipeline_interval_minutes"] = int(os.environ.get("CONTENT_PIPELINE_INTERVAL", "30"))
     ORCHESTRATION_CONFIG["publish_check_interval_minutes"] = int(os.environ.get("PUBLISH_CHECK_INTERVAL", "5"))
     ORCHESTRATION_CONFIG["queue_max_age_hours"] = float(os.environ.get("QUEUE_MAX_AGE_HOURS", "6"))
     
-    # V5.1: Reload per-platform timing configs
+    # Per-platform timing — NGUỒN DUY NHẤT cho default values
     ORCHESTRATION_CONFIG["platform_timing"]["telegram"] = {
         "mode": os.environ.get("TG_PUBLISH_MODE", "gap"),
         "min_gap_hours": float(os.environ.get("TG_MIN_GAP_HOURS", "4")),
@@ -43,11 +41,14 @@ def reload_config():
         "schedule": [t.strip() for t in os.environ.get("FB_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
         "interval_hours": float(os.environ.get("FB_INTERVAL_HOURS", "6")),
     }
+
+def reload_config():
+    """Hot-reload TẤT CẢ config từ .env. Gọi mỗi vòng lặp trong main.py."""
+    _reload_orchestration()
     
-    # Reload LLM Provider too
+    # Reload LLM Provider + API Keys
     LLM_CONFIG["active_provider"] = os.environ.get("LLM_PROVIDER", "gemini").lower()
     
-    # Reload API Keys into lists
     LLM_CONFIG["openai"]["api_keys"] = [k for k in [os.environ.get(f"OPENAI_API_KEY_{i}") for i in range(1, 10)] + [os.environ.get("OPENAI_API_KEY")] if k]
     if not LLM_CONFIG["openai"]["api_keys"]:
         LLM_CONFIG["openai"]["api_keys"] = ["dummy_key_for_test"]
@@ -98,28 +99,13 @@ ORCHESTRATION_CONFIG = {
     # mode: "gap" (check khoảng cách bài cuối trên channel)
     #        "scheduled" (đăng đúng giờ cố định)
     #        "interval" (cách đều N giờ kể từ lần đăng trước)
-    "platform_timing": {
-        "telegram": {
-            "mode": os.environ.get("TG_PUBLISH_MODE", "gap"),
-            "min_gap_hours": float(os.environ.get("TG_MIN_GAP_HOURS", "4")),
-            "gap_channel_id": os.environ.get("TG_GAP_CHANNEL_ID", ""),
-            "schedule": [t.strip() for t in os.environ.get("TG_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
-            "interval_hours": float(os.environ.get("TG_INTERVAL_HOURS", "4")),
-        },
-        "twitter": {
-            "mode": os.environ.get("TW_PUBLISH_MODE", "scheduled"),
-            "min_gap_hours": float(os.environ.get("TW_MIN_GAP_HOURS", "4")),
-            "schedule": [t.strip() for t in os.environ.get("TW_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
-            "interval_hours": float(os.environ.get("TW_INTERVAL_HOURS", "6")),
-        },
-        "facebook": {
-            "mode": os.environ.get("FB_PUBLISH_MODE", "scheduled"),
-            "min_gap_hours": float(os.environ.get("FB_MIN_GAP_HOURS", "4")),
-            "schedule": [t.strip() for t in os.environ.get("FB_SCHEDULE", "").split(",") if t.strip()],
-            "interval_hours": float(os.environ.get("FB_INTERVAL_HOURS", "6")),
-        },
-    },
+    # ⚠️ CÁC GIÁ TRỊ DEFAULT ĐƯỢC KHAI BÁO DUY NHẤT TRONG reload_config()
+    #    Không khai báo ở đây để tránh trùng lặp.
+    "platform_timing": {},
 }
+
+# Điền platform_timing ngay lúc khởi động (chỉ cần ORCHESTRATION_CONFIG, chưa cần LLM_CONFIG)
+_reload_orchestration()
 
 class RssSource(TypedDict):
     id: str
