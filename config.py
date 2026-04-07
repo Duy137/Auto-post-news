@@ -23,6 +23,27 @@ def reload_config():
     ORCHESTRATION_CONFIG["publish_check_interval_minutes"] = int(os.environ.get("PUBLISH_CHECK_INTERVAL", "5"))
     ORCHESTRATION_CONFIG["queue_max_age_hours"] = float(os.environ.get("QUEUE_MAX_AGE_HOURS", "6"))
     
+    # V5.1: Reload per-platform timing configs
+    ORCHESTRATION_CONFIG["platform_timing"]["telegram"] = {
+        "mode": os.environ.get("TG_PUBLISH_MODE", "gap"),
+        "min_gap_hours": float(os.environ.get("TG_MIN_GAP_HOURS", "4")),
+        "gap_channel_id": os.environ.get("TG_GAP_CHANNEL_ID", ""),
+        "schedule": [t.strip() for t in os.environ.get("TG_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
+        "interval_hours": float(os.environ.get("TG_INTERVAL_HOURS", "4")),
+    }
+    ORCHESTRATION_CONFIG["platform_timing"]["twitter"] = {
+        "mode": os.environ.get("TW_PUBLISH_MODE", "scheduled"),
+        "min_gap_hours": float(os.environ.get("TW_MIN_GAP_HOURS", "4")),
+        "schedule": [t.strip() for t in os.environ.get("TW_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
+        "interval_hours": float(os.environ.get("TW_INTERVAL_HOURS", "6")),
+    }
+    ORCHESTRATION_CONFIG["platform_timing"]["facebook"] = {
+        "mode": os.environ.get("FB_PUBLISH_MODE", "scheduled"),
+        "min_gap_hours": float(os.environ.get("FB_MIN_GAP_HOURS", "4")),
+        "schedule": [t.strip() for t in os.environ.get("FB_SCHEDULE", "").split(",") if t.strip()],
+        "interval_hours": float(os.environ.get("FB_INTERVAL_HOURS", "6")),
+    }
+    
     # Reload LLM Provider too
     LLM_CONFIG["active_provider"] = os.environ.get("LLM_PROVIDER", "gemini").lower()
     
@@ -43,7 +64,7 @@ warnings.filterwarnings("ignore")
 # Quy định luồng nào (RSS, EXPRESS) được đăng lên nền tảng nào.
 PLATFORM_MAPPING = {
     "EXPRESS": ["telegram"],
-    "RSS": ["telegram"]  # Thêm twitter, facebook nếu cần
+    "RSS": ["telegram","facebook"]  # Thêm twitter, facebook nếu cần
 }
 
 # --- CẤU HÌNH DUAL-LANE ORCHESTRATION ---
@@ -92,7 +113,7 @@ ORCHESTRATION_CONFIG = {
             "interval_hours": float(os.environ.get("TW_INTERVAL_HOURS", "6")),
         },
         "facebook": {
-            "mode": os.environ.get("FB_PUBLISH_MODE", "interval"),
+            "mode": os.environ.get("FB_PUBLISH_MODE", "scheduled"),
             "min_gap_hours": float(os.environ.get("FB_MIN_GAP_HOURS", "4")),
             "schedule": [t.strip() for t in os.environ.get("FB_SCHEDULE", "").split(",") if t.strip()],
             "interval_hours": float(os.environ.get("FB_INTERVAL_HOURS", "6")),
@@ -518,8 +539,6 @@ EXPRESS_CONFIG = {
     "source_channel": os.environ.get("TG_SOURCE_CHANNEL", "me"), 
 }
 
-# --- CẤU HÌNH RSS LOOP THỜI GIAN CHỜ ---
-RSS_LOOP_INTERVAL = 240 * 60 # 15 minutes by default
 
 
 # Thư mục chứa Data

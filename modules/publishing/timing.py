@@ -187,7 +187,7 @@ def calc_adjusted_score(editorial_score: float, published_ts: int) -> float:
     """Tính lại score với time_decay tại thời điểm hiện tại."""
     import time
     current_ts = int(time.time())
-    lmbda = SCORING_WEIGHTS.get("time_decay_lambda_per_hour", 0.04)
+    lmbda = SCORING_WEIGHTS.get("time_decay_lambda_per_hour", 0.035)
     
     MIN_VALID_TS = 1577836800  # 2020-01-01
     if not published_ts or published_ts < MIN_VALID_TS:

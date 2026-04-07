@@ -585,7 +585,7 @@ def pick_best_from_queue(platform: str, max_age_hours: float = 12.0) -> Optional
         
         # Tính lại decay cho từng bài và chọn bài tốt nhất
         current_ts = int(time.time())
-        lmbda = SCORING_WEIGHTS.get("time_decay_lambda_per_hour", 0.04)
+        lmbda = SCORING_WEIGHTS.get("time_decay_lambda_per_hour", 0.035)
         best_item = None
         best_score = -1.0
         

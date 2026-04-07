@@ -254,8 +254,8 @@ def materialize_schedules():
                     
     conn.commit()
     conn.close()
-    if inserted_count > 0 or updated_count > 0:
-        print(f"📅 [SCHEDULER] Đã sinh {inserted_count} lịch mới + cập nhật {updated_count} lịch PENDING cho 7 ngày tới.")
+    if inserted_count > 0:
+        print(f"📅 [SCHEDULER] Đã sinh {inserted_count} lịch mới cho 7 ngày tới.")
 
 # ---------------------------------------------------------
 # THE SCHEDULING ENGINE
