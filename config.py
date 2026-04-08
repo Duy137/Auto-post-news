@@ -241,7 +241,7 @@ SCORING_WEIGHTS: ScoringWeights = {
             "adds bitcoin to treasury", "buys bitcoin", "purchases bitcoin", "institutional inflow"
         ],
         "macro_politics": [
-            "bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "FOMC", "Powell", "Trump"
+            "bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "FOMC", "Powell", "Trump",
             "cpi", "rate", "powell", "fomc", "interest rates", "non-farm payrolls", "treasury", 
             "white house", "election", "dollar index", "dxy", "ppi", "gdp", "feds", "regulators", 
             "senate", "congress"
@@ -305,16 +305,7 @@ SCORING_WEIGHTS: ScoringWeights = {
     
     # Thực thể vĩ mô — Quỹ lớn, Tổ chức, Nhân vật ảnh hưởng thị trường crypto
     "macro_entities": [
-        # Nhân vật
-        "Vitalik", "Saylor", "Powell",
-        # Quỹ đầu tư & Asset Managers
-        "BlackRock", "Fidelity", "MicroStrategy", "Grayscale", "ARK Invest",
-        "a16z", "Andreessen Horowitz", "Galaxy Digital", "Pantera Capital", "Pantera",
-        "Paradigm", "DCG", "Digital Currency Group",
-        "VanEck", "Bitwise", "Franklin Templeton", "WisdomTree", "ProShares",
-        # Ngân hàng & Tài chính truyền thống
-        "JPMorgan", "Goldman Sachs", "Morgan Stanley", "Citadel", "Jane Street",
-        # Stablecoin issuers
+        "Vitalik", "Saylor", "Grayscale",
         "Tether", "USDT", "USDC", "Circle"
     ],
     
