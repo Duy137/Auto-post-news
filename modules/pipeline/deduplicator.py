@@ -239,11 +239,6 @@ if __name__ == "__main__":
     # ------------------ MÔ PHỎNG INPUT / OUTPUT ------------------
     logging.basicConfig(level=logging.DEBUG, format='%(message)s')
     print("\n[MÔ PHỎNG PHASE 2: DEDUPLICATOR]")
-    
-    # Fake history file start (Reset for test)
-    if os.path.exists(HISTORY_FILE):
-        os.remove(HISTORY_FILE)
-        
     # Dữ liệu mẫu cực nguy hiểm cho Soft Dedup cũ
     mock_articles: List[Article] = [
         # Tin 1: Bài đánh dấu gốc

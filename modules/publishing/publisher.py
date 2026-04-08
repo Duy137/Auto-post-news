@@ -184,7 +184,7 @@ def publish_to_facebook(article: Article, is_dry_run: bool, lane: str = "RSS") -
     if not page_token or not page_id:
         return {"success": False, "post_id": None, "error": "Missing Facebook API config"}
         
-    url = f"https://graph.facebook.com/v19.0/{page_id}/feed"
+    url = f"https://graph.facebook.com/v21.0/{page_id}/feed"
     payload = {"message": content, "access_token": page_token}
     if link:
         payload["link"] = link
@@ -319,7 +319,7 @@ def _publish_raw_facebook(content: str, link: str, is_dry_run: bool) -> Platform
     if not page_token or not page_id:
         return {"success": False, "post_id": None, "error": "Missing Facebook config"}
     
-    url = f"https://graph.facebook.com/v19.0/{page_id}/feed"
+    url = f"https://graph.facebook.com/v21.0/{page_id}/feed"
     payload = {
         "message": content,
         "access_token": page_token
@@ -433,8 +433,7 @@ if __name__ == "__main__":
         }
     ]
     
-    PUBLISHING_PLATFORMS["twitter"] = True
-    PUBLISHING_PLATFORMS["telegram"] = True
+    # Force dry_run for testing
     TWITTER_CONFIG["dry_run"] = True
     
     results = publish_all_platforms(mock_articles)
