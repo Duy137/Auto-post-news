@@ -241,7 +241,7 @@ SCORING_WEIGHTS: ScoringWeights = {
             "adds bitcoin to treasury", "buys bitcoin", "purchases bitcoin", "institutional inflow"
         ],
         "macro_politics": [
-            "bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", 
+            "bill", "legislation", "sec", "regulator", "government", "policy", "fed", "inflation", "FOMC", "Powell", "Trump"
             "cpi", "rate", "powell", "fomc", "interest rates", "non-farm payrolls", "treasury", 
             "white house", "election", "dollar index", "dxy", "ppi", "gdp", "feds", "regulators", 
             "senate", "congress"
@@ -303,14 +303,23 @@ SCORING_WEIGHTS: ScoringWeights = {
     ],
     "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Gemini", "Bitstamp", "MEXC", "Bitget", "BitMEX", "Upbit", "BingX"],
     
-    # Thực thể vĩ mô (SEC, Fed...) bổ trợ cho Token & Sàn
+    # Thực thể vĩ mô — Quỹ lớn, Tổ chức, Nhân vật ảnh hưởng thị trường crypto
     "macro_entities": [
-        "FOMC", "Powell", "Trump", "Musk", "Vitalik", "BlackRock", "Fidelity", "MicroStrategy", "Saylor", 
+        # Nhân vật
+        "Vitalik", "Saylor", "Powell",
+        # Quỹ đầu tư & Asset Managers
+        "BlackRock", "Fidelity", "MicroStrategy", "Grayscale", "ARK Invest",
+        "a16z", "Andreessen Horowitz", "Galaxy Digital", "Pantera Capital", "Pantera",
+        "Paradigm", "DCG", "Digital Currency Group",
+        "VanEck", "Bitwise", "Franklin Templeton", "WisdomTree", "ProShares",
+        # Ngân hàng & Tài chính truyền thống
+        "JPMorgan", "Goldman Sachs", "Morgan Stanley", "Citadel", "Jane Street",
+        # Stablecoin issuers
         "Tether", "USDT", "USDC", "Circle"
     ],
     
     # Cấu hình Phạt cho tin không có Core Entity (Áp dụng cho rổ Security/Business/Tech)
-    "non_core_penalty_multiplier": 0.3, # Giữ lại 30% điểm (Phạt 70%)
+    "non_core_penalty_multiplier": 0.2, # Giữ lại 30% điểm (Phạt 70%)
     "contextual_penalty_multiplier": 0.5, # Giảm mức phạt của rổ giá cả xuống còn 30% (tức phạt nhẹ đi) nếu bài có đi kèm tin vĩ mô/tin thị trường
     "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
     

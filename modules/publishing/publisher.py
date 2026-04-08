@@ -184,16 +184,28 @@ def publish_to_facebook(article: Article, is_dry_run: bool, lane: str = "RSS") -
     if not page_token or not page_id:
         return {"success": False, "post_id": None, "error": "Missing Facebook API config"}
         
-    url = f"https://graph.facebook.com/v21.0/{page_id}/feed"
+    url = f"https://graph.facebook.com/v25.0/{page_id}/feed"
     payload = {"message": content, "access_token": page_token}
     if link:
         payload["link"] = link
     
     try:
-        response = requests.post(url, data=payload, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        return {"success": True, "post_id": data.get("id"), "error": None}
+        response = requests.post(url, data=payload, timeout=15)
+        try:
+            resp_data = response.json()
+        except Exception:
+            resp_data = {}
+        
+        if not response.ok:
+            fb_error = resp_data.get("error", {})
+            error_msg = fb_error.get("message", response.text[:200])
+            error_type = fb_error.get("type", "Unknown")
+            error_code = fb_error.get("code", response.status_code)
+            full_error = f"[FB {error_code}/{error_type}] {error_msg}"
+            logger.error(f"❌ [FACEBOOK API] {full_error}")
+            return {"success": False, "post_id": None, "error": full_error}
+        
+        return {"success": True, "post_id": resp_data.get("id"), "error": None}
     except Exception as e:
         logger.error(f"Facebook API Error: {e}")
         return {"success": False, "post_id": None, "error": str(e)}
@@ -319,7 +331,7 @@ def _publish_raw_facebook(content: str, link: str, is_dry_run: bool) -> Platform
     if not page_token or not page_id:
         return {"success": False, "post_id": None, "error": "Missing Facebook config"}
     
-    url = f"https://graph.facebook.com/v21.0/{page_id}/feed"
+    url = f"https://graph.facebook.com/v25.0/{page_id}/feed"
     payload = {
         "message": content,
         "access_token": page_token
@@ -329,11 +341,28 @@ def _publish_raw_facebook(content: str, link: str, is_dry_run: bool) -> Platform
         payload["link"] = link
     
     try:
-        response = requests.post(url, data=payload, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        return {"success": True, "post_id": data.get("id"), "error": None}
+        response = requests.post(url, data=payload, timeout=15)
+        
+        # Đọc response body TRƯỚC khi raise — Facebook luôn trả JSON error chi tiết
+        try:
+            resp_data = response.json()
+        except Exception:
+            resp_data = {}
+        
+        if not response.ok:
+            fb_error = resp_data.get("error", {})
+            error_msg = fb_error.get("message", response.text[:200])
+            error_type = fb_error.get("type", "Unknown")
+            error_code = fb_error.get("code", response.status_code)
+            full_error = f"[FB {error_code}/{error_type}] {error_msg}"
+            logger.error(f"❌ [FACEBOOK API] {full_error}")
+            return {"success": False, "post_id": None, "error": full_error}
+        
+        return {"success": True, "post_id": resp_data.get("id"), "error": None}
+    except requests.exceptions.Timeout:
+        return {"success": False, "post_id": None, "error": "Facebook API timeout (15s)"}
     except Exception as e:
+        logger.error(f"💥 [FACEBOOK API] Unexpected error: {e}")
         return {"success": False, "post_id": None, "error": str(e)}
 
 
