@@ -97,7 +97,14 @@ async def run_content_pipeline_loop():
                 logger.warning("[CONTENT PIPELINE] No articles fetched.")
             else:
                 for art in articles:
-                    insert_new_article(art["id"], art["link"], art["title"], art["source_name"])
+                    insert_new_article(
+                        art["id"], 
+                        art["link"], 
+                        art["title"], 
+                        art["source_name"], 
+                        art.get("summary", ""),
+                        art.get("published_ts", 0)
+                    )
                 
                 # Phase 2: Deduplicate
                 unique_articles = deduplicate_articles(articles)
@@ -117,37 +124,7 @@ async def run_content_pipeline_loop():
                     if selected_articles:
                         for art in selected_articles:
                             transition_state(art["id"], ArticleState.SELECTED)
-                        
-                        # Skip summarize on first cycle (deploy-spam guard)
-                        if is_first_cycle:
-                            logger.info("🛡️ [CONTENT PIPELINE] STARTUP GUARD: Skipping first cycle to avoid deploy-spam.")
-                        else:
-                            # Phase 5: Summarize
-                            summarized_articles = summarize_articles(selected_articles)
-                            
-                            if summarized_articles:
-                                for art in summarized_articles:
-                                    transition_state(art["id"], ArticleState.PROCESSING)
-                                    
-                                    # Format nội dung cho từng platform và lưu vào kho
-                                    content_tg = build_content(art, "telegram", "RSS")
-                                    content_tw = build_content(art, "twitter", "RSS")
-                                    content_fb = build_content(art, "facebook", "RSS")
-                                    
-                                    editorial_score = art.get("score", 0)
-                                    published_ts = art.get("published_ts", 0)
-                                    headline = art.get("structured_content", {}).get("headline", art.get("title", ""))
-                                    link = art.get("link", "")
-                                    
-                                    inserted = insert_to_publish_queue(
-                                        art["id"], headline, content_tg, content_tw, content_fb,
-                                        link, editorial_score, published_ts
-                                    )
-                                    if inserted:
-                                        metrics["queued_count"] += 1
-                                        logger.info(f"📦 [QUEUE] Article '{art['id']}' → kho (score={editorial_score:.1f})")
-                                    else:
-                                        logger.debug(f"📦 [QUEUE] Article '{art['id']}' already in queue.")
+                            logger.info(f"🏆 [PIPELINE] Article '{art['id']}' marked as SELECTED. Ready for JIT summarization.")
         
         except Exception as e:
             logger.error(f"PIPELINE ERROR: {e}\n{traceback.format_exc()}")
@@ -168,8 +145,80 @@ async def run_content_pipeline_loop():
 
 
 # ==========================================
+# ==========================================
 # TASK 2: PLATFORM PUBLISHER (check timing → đăng)
 # ==========================================
+
+async def get_or_create_publish_content(platform: str, max_age_hours: float):
+    """
+    Middleware Adapter: Biên tập JIT và lấy nội dung đăng.
+    - So sánh bài trong queue và bài chưa tóm tắt trong articles.
+    - Nếu bài chưa tóm tắt tốt hơn -> Gọi LLM -> cất vào kho -> trả về.
+    - Hỗ trợ Fallback an toàn nếu LLM lỗi.
+    """
+    from modules.state_manager import (
+        pick_best_from_queue, get_best_selected_article, transition_state, 
+        ArticleState, insert_to_publish_queue
+    )
+    from modules.pipeline.summarize import summarize_articles
+    
+    # 1. Grab already-summarized candidate from queue
+    best_queued = pick_best_from_queue(platform, max_age_hours)
+    
+    # 2. Grab not-yet-summarized candidate from articles
+    best_selected = get_best_selected_article(platform, max_age_hours)
+    
+    if not best_queued and not best_selected:
+        return None
+        
+    score_q = best_queued.get("adjusted_score", -1) if best_queued else -1
+    score_s = best_selected.get("adjusted_score", -1) if best_selected else -1
+    
+    if score_s > score_q:
+        art = best_selected
+        logger.info(f"⚡ [JIT SUMMARIZE] '{art['title'][:40]}...' (Score: {score_s}) vượt bài trong kho ({score_q}). Calling LLM...")
+        
+        article_obj = {
+            "id": art["id"],
+            "title": art["title"],
+            "summary": art["summary"],
+            "link": art["link"],
+            "source_name": art["source_name"],
+            "published_ts": art.get("published_ts") or art["created_ts"],
+            "score": art.get("editorial_score", 0), # Pass decay-free base score
+            "score_detail": art.get("score_detail", {})
+        }
+        
+        try:
+            loop = asyncio.get_running_loop()
+            summarized_list = await loop.run_in_executor(None, summarize_articles, [article_obj])
+            
+            if summarized_list and len(summarized_list) > 0:
+                finished_art = summarized_list[0]
+                transition_state(finished_art["id"], ArticleState.PROCESSING)
+                
+                content_tg = build_content(finished_art, "telegram", "RSS")
+                content_tw = build_content(finished_art, "twitter", "RSS")
+                content_fb = build_content(finished_art, "facebook", "RSS")
+                
+                headline = finished_art.get("structured_content", {}).get("headline", finished_art.get("title", ""))
+                
+                inserted = insert_to_publish_queue(
+                    finished_art["id"], headline, content_tg, content_tw, content_fb,
+                    finished_art["link"], finished_art.get("score", 0), finished_art.get("published_ts", 0)
+                )
+                if inserted:
+                    logger.info(f"📦 [QUEUE] JIT Article '{finished_art['id']}' saved to publish_queue.")
+                    
+                return pick_best_from_queue(platform, max_age_hours)
+            else:
+                logger.warning("⚠️ [JIT SUMMARIZE] LLM API returned empty. Fallback to cached item.")
+        except Exception as e:
+            logger.error(f"💥 [JIT SUMMARIZE ERROR] Lỗi API: {e}. Fallback to cached item.")
+            
+    if best_queued:
+        return best_queued
+    return None
 
 async def run_platform_publisher_loop():
     """
@@ -207,10 +256,10 @@ async def run_platform_publisher_loop():
                 if not timing_ok:
                     continue
                 
-                # Bước 2: Lấy bài tốt nhất từ kho
-                queue_item = pick_best_from_queue(platform, max_age)
+                # Bước 2: Lấy bài từ JIT Middleware (Adapter)
+                queue_item = await get_or_create_publish_content(platform, max_age)
                 if not queue_item:
-                    logger.info(f"📭 [PLATFORM PUBLISHER] {platform.upper()}: Timing OK nhưng kho trống. Bỏ qua.")
+                    logger.info(f"📭 [PLATFORM PUBLISHER] {platform.upper()}: Timing OK nhưng không có bài nào đủ điều kiện. Bỏ qua.")
                     continue
                 
                 adj_score = queue_item.get("adjusted_score", 0)

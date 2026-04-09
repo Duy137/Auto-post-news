@@ -195,6 +195,7 @@ class KeywordCategoryConfig(TypedDict):
     price_analysis: List[str]
     business_development: List[str]
     security_incident: List[str]
+    advertising_pr: List[str]
 
 class KeywordCapConfig(TypedDict):
     market_moving: float
@@ -203,6 +204,7 @@ class KeywordCapConfig(TypedDict):
     price_analysis: float
     business_development: float
     negative_event: float
+    advertising_pr: float
 
 class ScoringWeights(TypedDict):
     base_score: float
@@ -276,6 +278,9 @@ SCORING_WEIGHTS: ScoringWeights = {
             # Operational Failures & Bearish Token Mics
             "withdrawal halt", "trading halt", "suspend trading", "halt withdrawals", "outage", "downtime", "system failure", "delist", "delisting",
             "token unlock", "unlock", "staking unlock", "inflation change"
+        ],
+        "advertising_pr": [
+            "giveaway", "promo", "referral", "sponsored", "VIP", "AMA", "VVIP"
         ]
     },
     
@@ -286,7 +291,8 @@ SCORING_WEIGHTS: ScoringWeights = {
         "major_tech": 3.0,
         "price_analysis": -18.0,
         "business_development": 8.0,
-        "negative_event": 8.0
+        "negative_event": 8.0,
+        "advertising_pr": -20.0
     },
     
     "major_tokens": [
@@ -301,7 +307,7 @@ SCORING_WEIGHTS: ScoringWeights = {
         "JUP", "Jupiter", "TIA", "Celestia", "SEI", "CRO", "Cronos", "HBAR", "Hedera", "WLD", "Worldcoin", 
         "BGB", "PYTH", "GRT", "The Graph", "ENA", "Ethena", "ONDO", "THETA", "AR", "Arweave"
     ],
-    "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Gemini", "Bitstamp", "MEXC", "Bitget", "BitMEX", "Upbit", "BingX"],
+    "major_exchanges": ["Binance", "Coinbase", "OKX", "Kraken", "Bybit", "KuCoin", "Bitfinex", "Gate", "Gate.io", "Huobi", "HTX", "Crypto.com", "Bitstamp", "MEXC", "Bitget", "BitMEX", "Upbit", "BingX"],
     
     # Thực thể vĩ mô — Quỹ lớn, Tổ chức, Nhân vật ảnh hưởng thị trường crypto
     "macro_entities": [

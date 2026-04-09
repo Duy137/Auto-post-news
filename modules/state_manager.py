@@ -56,6 +56,8 @@ def init_db():
                 state TEXT NOT NULL DEFAULT 'NEW',
                 title TEXT,
                 source_name TEXT,
+                summary TEXT,
+                published_ts INTEGER,
                 score_snapshot TEXT,
                 retry_count INTEGER DEFAULT 0,
                 lock_flag INTEGER DEFAULT 0,
@@ -67,6 +69,16 @@ def init_db():
         
         try:
             cursor.execute("ALTER TABLE articles ADD COLUMN event_root_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            cursor.execute("ALTER TABLE articles ADD COLUMN summary TEXT")
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            cursor.execute("ALTER TABLE articles ADD COLUMN published_ts INTEGER")
         except sqlite3.OperationalError:
             pass
             
@@ -173,14 +185,14 @@ def init_db():
         conn.commit()
         logger.info("Database initialized successfully with WAL and Triggers.")
 
-def insert_new_article(article_id: str, canonical_url: str, title: str = "", source_name: str = "") -> bool:
+def insert_new_article(article_id: str, canonical_url: str, title: str = "", source_name: str = "", summary: str = "", published_ts: int = 0) -> bool:
     """Nhét bài vào DB. Trả về True nếu Insert thành công (Mới), False nếu Duplicate (Bỏ qua)."""
     with get_db_connection() as conn:
         try:
             conn.execute('''
-                INSERT INTO articles (id, canonical_url, state, title, source_name)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (article_id, canonical_url, ArticleState.NEW, title, source_name))
+                INSERT INTO articles (id, canonical_url, state, title, source_name, summary, published_ts)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (article_id, canonical_url, ArticleState.NEW, title, source_name, summary, published_ts))
             conn.commit()
             return True
         except sqlite3.IntegrityError:
@@ -639,6 +651,58 @@ def expire_old_queue_items(max_age_hours: float = 12.0):
         conn.commit()
         if expired > 0:
             logger.info(f"📦 [QUEUE] Expired {expired} stale items from publish_queue.")
+
+def get_best_selected_article(platform: str, max_age_hours: float = 12.0) -> Optional[Dict[str, Any]]:
+    """Tìm ứng viên tốt nhất (nhưng chưa từng được biên tập/tóm tắt) từ bảng articles.
+    Chỉ tìm bài có state = 'SELECTED'."""
+    from config import SCORING_WEIGHTS
+    current_ts = int(time.time())
+    
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Không chọn bài của các platform đã được mark posted
+        cursor.execute(f'''
+            SELECT id, title, canonical_url as link, source_name, summary, published_ts, score_snapshot,
+                   CAST(strftime('%s', created_at) AS INTEGER) as created_ts
+            FROM articles
+            WHERE state = 'SELECTED'
+            AND created_at >= datetime('now', '-{int(max_age_hours)} hours')
+            AND id NOT IN (
+                SELECT article_id FROM platform_publish_log WHERE platform = ?
+            )
+        ''', (platform,))
+        rows = cursor.fetchall()
+        
+        best_item = None
+        best_score = -1.0
+        lmbda = SCORING_WEIGHTS.get("time_decay_lambda_per_hour", 0.035)
+        
+        for row in rows:
+            row_dict = dict(row)
+            try:
+                snapshot = json.loads(row_dict.get("score_snapshot", "{}"))
+            except Exception:
+                continue
+                
+            editorial_score = snapshot.get("editorial_score", 0)
+            
+            pub_ts = row_dict.get("published_ts")
+            if not pub_ts: 
+                pub_ts = row_dict["created_ts"]
+                
+            hours_passed = max((current_ts - pub_ts) / 3600.0, 0)
+            fresh_decay = max(math.exp(-lmbda * hours_passed), 0.12)
+            adjusted = editorial_score * fresh_decay
+            
+            if adjusted > best_score:
+                best_score = adjusted
+                row_dict["adjusted_score"] = round(adjusted, 2)
+                row_dict["editorial_score"] = editorial_score
+                row_dict["score"] = adjusted
+                row_dict["score_detail"] = snapshot
+                best_item = row_dict
+                
+        return best_item
 
 # ==========================================
 # MAINTENANCE: GARBAGE COLLECTION
