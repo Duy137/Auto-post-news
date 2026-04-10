@@ -280,7 +280,7 @@ SCORING_WEIGHTS: ScoringWeights = {
             "token unlock", "unlock", "staking unlock", "inflation change"
         ],
         "advertising_pr": [
-            "giveaway", "promo", "referral", "sponsored", "VIP", "AMA", "VVIP"
+            "giveaway", "promo", "referral", "sponsored", "VIP", "AMA", "VVIP", "product",
         ]
     },
     
