@@ -1,5 +1,6 @@
 import logging
 import time
+import threading
 from typing import List, Optional
 
 import sys
@@ -17,6 +18,83 @@ from google.auth.exceptions import DefaultCredentialsError
 logger = logging.getLogger(__name__)
 ACTIVE_PROVIDER = LLM_CONFIG.get("active_provider", "gemini")
 MAX_RETRIES = LLM_CONFIG["max_retries"]
+
+# --- Internal Rate Limiter (chống vượt quota Google AI Studio) ---
+# Google AI Studio dùng hệ thống quota RPM/RPD PER MODEL (không per key).
+# Nếu hệ thống gọi quá quota → 429 Rate Limit → key rotation vô nghĩa.
+# Rate limiter này chặn TRƯỚC khi gọi API để tránh lãng phí request.
+
+class InternalRateLimiter:
+    """
+    Đếm số API calls per model, chặn khi gần quota.
+    Thread-safe cho asyncio run_in_executor.
+    """
+    # Giữ buffer ~15% dưới quota thật để tránh edge case
+    MODEL_LIMITS = {
+        "gemini-2.5-flash":     {"rpm": 4,  "rpd": 17},      # Real: 5 RPM, 20 RPD
+        "gemma-3-27b-it":       {"rpm": 25, "rpd": 13000},   # Real: 30 RPM, 14.4K RPD
+        "gpt-4o-mini":          {"rpm": 4, "rpd": 50},     # OpenAI: generous limits
+    }
+    DEFAULT_LIMITS = {"rpm": 8, "rpd": 80}
+    
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._daily = {}   # {model: {"date": str, "count": int}}
+        self._minute = {}  # {model: {"key": str, "count": int}}
+    
+    def _get_limits(self, model_name: str) -> dict:
+        return self.MODEL_LIMITS.get(model_name, self.DEFAULT_LIMITS)
+    
+    def can_call(self, model_name: str) -> bool:
+        """Kiểm tra xem còn quota để gọi model này không."""
+        limits = self._get_limits(model_name)
+        daily_key = time.strftime("%Y-%m-%d")
+        minute_key = time.strftime("%Y-%m-%d %H:%M")
+        
+        with self._lock:
+            # Check RPD
+            d = self._daily.get(model_name, {})
+            if d.get("date") == daily_key and d.get("count", 0) >= limits["rpd"]:
+                return False
+            
+            # Check RPM
+            m = self._minute.get(model_name, {})
+            if m.get("key") == minute_key and m.get("count", 0) >= limits["rpm"]:
+                return False
+        
+        return True
+    
+    def record_call(self, model_name: str):
+        """Ghi nhận 1 API call đã thực hiện."""
+        daily_key = time.strftime("%Y-%m-%d")
+        minute_key = time.strftime("%Y-%m-%d %H:%M")
+        
+        with self._lock:
+            # Update daily counter
+            d = self._daily.get(model_name, {})
+            if d.get("date") != daily_key:
+                self._daily[model_name] = {"date": daily_key, "count": 1}
+            else:
+                d["count"] = d.get("count", 0) + 1
+            
+            # Update minute counter
+            m = self._minute.get(model_name, {})
+            if m.get("key") != minute_key:
+                self._minute[model_name] = {"key": minute_key, "count": 1}
+            else:
+                m["count"] = m.get("count", 0) + 1
+    
+    def get_usage(self, model_name: str) -> str:
+        """Trả về chuỗi dạng 'used/limit RPD' cho logging."""
+        limits = self._get_limits(model_name)
+        daily_key = time.strftime("%Y-%m-%d")
+        with self._lock:
+            d = self._daily.get(model_name, {})
+            count = d.get("count", 0) if d.get("date") == daily_key else 0
+        return f"{count}/{limits['rpd']} RPD"
+
+
+_rate_limiter = InternalRateLimiter()
 
 # --- SETUP OPENAI QUOTE STATE (Removed global client, using explicit keys instead) ---
 # --- SETUP GEMINI QUOTE STATE (Removed global config, using explicit keys instead) ---
@@ -227,12 +305,22 @@ def _call_gemini(system_prompt: str, user_prompt: str, api_key: str, model_name:
         return "FATAL_ERROR"
     return None
 
+def _detect_provider(model_name: str) -> str:
+    """Tự phát hiện provider từ tên model. Hỗ trợ cross-provider fallback."""
+    model_lower = model_name.lower()
+    if any(prefix in model_lower for prefix in ["gpt-", "o1-", "o3-", "o4-", "chatgpt"]):
+        return "openai"
+    # Default: gemini (bao gồm gemini-*, gemma-*)
+    return "gemini"
+
 def call_llm_with_retry(system_prompt: str, user_prompt: str, lane: str = "RSS") -> Optional[str]:
-    """Wraps API call with Provider Router, API Key Rotation, and Model Degradation Fallback."""
+    """
+    Wraps API call with:
+    - Cross-Provider Fallback: mỗi model tự detect provider (Gemini/OpenAI)
+    - API Key Rotation: xoay key khi bị rate limit
+    - Model Degradation: fallback theo thứ tự trong lane_models
+    """
     lane = lane.upper()
-    provider = ACTIVE_PROVIDER
-    
-    api_keys = LLM_CONFIG.get(provider, {}).get("api_keys", ["dummy_key_for_test"])
     models = LLM_CONFIG.get("lane_models", {}).get(lane, [])
     timeout = LLM_CONFIG.get("lane_timeouts", {}).get(lane, 15)
     
@@ -240,17 +328,33 @@ def call_llm_with_retry(system_prompt: str, user_prompt: str, lane: str = "RSS")
         logger.error(f"No LLM models configured for lane {lane}!")
         return None
 
-    if len(api_keys) == 1 and api_keys[0] == "dummy_key_for_test":
-        logger.warning(f"No valid {provider.upper()} API Key defined. Mocking LLM Output.")
-        return f"🚨 BREAKING: Mocked tweet content based on rule generation. #{provider} #Crypto"
-
-    # Outer Loop: Model Fallback
+    # Outer Loop: Model Fallback (cross-provider)
     for m_idx, current_model in enumerate(models):
-        logger.info(f"--- Establishing LLM Base: Lane={lane} | Model={current_model} | Timeout={timeout}s ---")
+        # Auto-detect provider cho model hiện tại
+        provider = _detect_provider(current_model)
+        api_keys = LLM_CONFIG.get(provider, {}).get("api_keys", ["dummy_key_for_test"])
+        
+        # Skip nếu không có key hợp lệ cho provider này
+        if len(api_keys) == 1 and api_keys[0] == "dummy_key_for_test":
+            logger.warning(f"[LLM] No valid {provider.upper()} API key for {current_model}. Skipping...")
+            continue
+        
+        # Rate Limiter Gate — chặn trước khi gọi API
+        if not _rate_limiter.can_call(current_model):
+            logger.warning(
+                f"🛑 [RATE LIMITER] {current_model} đã đạt giới hạn nội bộ "
+                f"({_rate_limiter.get_usage(current_model)}). Chuyển sang model tiếp theo..."
+            )
+            continue
+        
+        logger.info(f"--- LLM Base: Lane={lane} | Provider={provider} | Model={current_model} | Timeout={timeout}s | Usage={_rate_limiter.get_usage(current_model)} ---")
         
         # Inner Loop: Key Rotation
         for k_idx, current_key in enumerate(api_keys):
-            logger.info(f"[LLM] lane={lane} model={current_model} key_idx={k_idx} -> Executing Call")
+            logger.info(f"[LLM] lane={lane} provider={provider} model={current_model} key_idx={k_idx} -> Call")
+            
+            # Ghi nhận request TRƯỚC khi gọi (fail cũng tốn quota phía provider)
+            _rate_limiter.record_call(current_model)
             
             if provider == "openai":
                 result = _call_openai(system_prompt, user_prompt, current_key, current_model, timeout)
@@ -258,7 +362,7 @@ def call_llm_with_retry(system_prompt: str, user_prompt: str, lane: str = "RSS")
                 result = _call_gemini(system_prompt, user_prompt, current_key, current_model, timeout)
             else:
                 logger.error(f"Unknown LLM Provider: {provider}")
-                return None
+                continue
                 
             if result == "RATE_LIMIT":
                 logger.warning(f"[LLM] rate limit detected -> rotating key (exhausted key_idx={k_idx})")
@@ -287,7 +391,13 @@ def polish_vietnamese(raw_content: str) -> Optional[str]:
     Bước 2 (RSS-only): Dùng Gemma sửa chính tả tiếng Việt và dịch headline nếu còn tiếng Anh.
     - Luôn dùng Gemma (free tier) với temperature=0 (deterministic).
     - Length guard: nếu output chênh >20% so với input → giữ bản gốc.
+    - Tắt tạm thời: set POLISH_ENABLED=False trong .env
     """
+    import os
+    if os.environ.get("POLISH_ENABLED", "False").lower() == "false":
+        logger.info("[POLISH] ⏭️ Polish đã tắt (POLISH_ENABLED=False). Giữ bản gốc.")
+        return None
+    
     if not raw_content or len(raw_content.strip()) < 10:
         return None
 
@@ -298,14 +408,21 @@ def polish_vietnamese(raw_content: str) -> Optional[str]:
 
     user_prompt = f"Kiểm tra và sửa bài viết sau:\n\n{raw_content}"
 
-    provider = ACTIVE_PROVIDER
-    api_keys = LLM_CONFIG.get(provider, {}).get("api_keys", [])
     polish_model = "gemma-3-27b-it"
+    provider = _detect_provider(polish_model)
+    api_keys = LLM_CONFIG.get(provider, {}).get("api_keys", [])
     timeout = 30
 
     for api_key in api_keys:
         if api_key == "dummy_key_for_test":
             continue
+
+        # Rate Limiter check cho Polish step
+        if not _rate_limiter.can_call(polish_model):
+            logger.warning(f"🛑 [RATE LIMITER] Polish model {polish_model} đạt giới hạn ({_rate_limiter.get_usage(polish_model)}). Giữ bản gốc.")
+            return None
+
+        _rate_limiter.record_call(polish_model)
 
         if provider == "gemini":
             result = _call_gemini(polish_prompt, user_prompt, api_key, polish_model, timeout, temperature=0)

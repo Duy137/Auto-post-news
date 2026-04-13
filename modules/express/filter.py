@@ -209,6 +209,6 @@ def score_express_message(text: str) -> Tuple[bool, float, dict]:
     if is_passed:
         logger.info(f"✅ PASSED Filter | Score: {total_score} >= {EXPRESS_SCORE_THRESHOLD} | Matches: {matched_keywords}")
     else:
-        logger.info(f"❌ FAILED Filter | Score: {total_score} < {EXPRESS_SCORE_THRESHOLD} | Matches: {matched_keywords}")
+        logger.debug(f"❌ FAILED Filter | Score: {total_score} < {EXPRESS_SCORE_THRESHOLD} | Matches: {matched_keywords}")
         
     return is_passed, total_score, matched_keywords

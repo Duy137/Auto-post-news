@@ -13,6 +13,14 @@ from config import TWITTER_CONFIG, EXPRESS_CONFIG, ORCHESTRATION_CONFIG, PLATFOR
 
 logger = logging.getLogger("ORCHESTRATOR")
 
+# --- JIT Failure Cooldown (v2: retry-aware) ---
+# Khi LLM thất bại, cho phép retry tối đa 2 lần, cooldown 5 phút giữa các lần.
+# Sau 2 lần thất bại → chuyển bài sang SKIPPED (bỏ hẳn).
+# Dict: {article_id: {"cooldown_until": float, "retry_count": int}}
+_jit_fail_tracker: dict = {}
+JIT_COOLDOWN_SECONDS = 300  # 5 phút — đủ ngắn vì bài đã được chọn đăng
+JIT_MAX_RETRIES = 2         # Tối đa 2 lần retry (tổng cộng 3 attempts)
+
 async def network_preflight_check(max_retries=3, delay=5):
     """Verify outbound internet access before starting lanes."""
     session = get_rss_session()
@@ -138,7 +146,7 @@ async def run_content_pipeline_loop():
             except: pass
             
             # Sleep theo content_pipeline_interval
-            interval_min = ORCHESTRATION_CONFIG.get("content_pipeline_interval_minutes", 30)
+            interval_min = ORCHESTRATION_CONFIG.get("content_pipeline_interval_minutes", 120)
             wait_time = max(interval_min * 60, 60)
             logger.info(f"💤 [CONTENT PIPELINE] Sleeping for {interval_min}m...")
             await asyncio.sleep(wait_time)
@@ -174,6 +182,42 @@ async def get_or_create_publish_content(platform: str, max_age_hours: float):
     score_q = best_queued.get("adjusted_score", -1) if best_queued else -1
     score_s = best_selected.get("adjusted_score", -1) if best_selected else -1
     
+    # JIT Retry Guard: kiểm tra cooldown và giới hạn retry
+    if best_selected:
+        art_id = best_selected["id"]
+        tracker = _jit_fail_tracker.get(art_id)
+        
+        if tracker:
+            # Đã hết retry → bài này đã bị SKIPPED, không xét nữa
+            if tracker["retry_count"] >= JIT_MAX_RETRIES:
+                best_selected = None
+                score_s = -1
+            # Đang trong cooldown → chờ
+            elif time.time() < tracker["cooldown_until"]:
+                remaining_sec = tracker["cooldown_until"] - time.time()
+                logger.info(
+                    f"⏳ [JIT COOLDOWN] Article '{art_id}' đang chờ retry "
+                    f"(lần {tracker['retry_count']}/{JIT_MAX_RETRIES}, "
+                    f"còn {remaining_sec:.0f}s). Dùng bài trong kho."
+                )
+                best_selected = None
+                score_s = -1
+            else:
+                # Hết cooldown → cho retry
+                logger.info(
+                    f"🔄 [JIT RETRY] Article '{art_id}' hết cooldown. "
+                    f"Retry lần {tracker['retry_count'] + 1}/{JIT_MAX_RETRIES}..."
+                )
+    
+    # Dọn dẹp tracker cho bài đã hết hạn hoặc đã SKIPPED lâu (tránh memory leak)
+    current_time = time.time()
+    stale_keys = [
+        k for k, v in _jit_fail_tracker.items() 
+        if current_time >= v["cooldown_until"] + 3600  # Xóa sau 1 giờ kể từ cooldown hết hạn
+    ]
+    for k in stale_keys:
+        del _jit_fail_tracker[k]
+    
     if score_s > score_q:
         art = best_selected
         logger.info(f"⚡ [JIT SUMMARIZE] '{art['title'][:40]}...' (Score: {score_s}) vượt bài trong kho ({score_q}). Calling LLM...")
@@ -197,6 +241,9 @@ async def get_or_create_publish_content(platform: str, max_age_hours: float):
                 finished_art = summarized_list[0]
                 transition_state(finished_art["id"], ArticleState.PROCESSING)
                 
+                # Thành công → xóa tracker
+                _jit_fail_tracker.pop(art["id"], None)
+                
                 content_tg = build_content(finished_art, "telegram", "RSS")
                 content_tw = build_content(finished_art, "twitter", "RSS")
                 content_fb = build_content(finished_art, "facebook", "RSS")
@@ -212,13 +259,44 @@ async def get_or_create_publish_content(platform: str, max_age_hours: float):
                     
                 return pick_best_from_queue(platform, max_age_hours)
             else:
-                logger.warning("⚠️ [JIT SUMMARIZE] LLM API returned empty. Fallback to cached item.")
+                # LLM thất bại → tăng retry_count, set cooldown
+                _handle_jit_failure(art["id"], "LLM trả về empty", transition_state, ArticleState)
         except Exception as e:
-            logger.error(f"💥 [JIT SUMMARIZE ERROR] Lỗi API: {e}. Fallback to cached item.")
+            _handle_jit_failure(art["id"], str(e), transition_state, ArticleState)
             
     if best_queued:
         return best_queued
     return None
+
+def _handle_jit_failure(article_id: str, reason: str, transition_state, ArticleState):
+    """
+    Xử lý khi JIT Summarize thất bại:
+    - Tăng retry_count
+    - Nếu đạt max → transition sang SKIPPED
+    - Nếu chưa → set cooldown 5 phút để retry lần sau
+    """
+    tracker = _jit_fail_tracker.get(article_id, {"cooldown_until": 0, "retry_count": 0})
+    tracker["retry_count"] += 1
+    
+    if tracker["retry_count"] >= JIT_MAX_RETRIES:
+        # Hết lượt retry → bỏ bài này vĩnh viễn
+        tracker["cooldown_until"] = time.time()  # Không cần chờ nữa
+        _jit_fail_tracker[article_id] = tracker
+        
+        transition_state(article_id, ArticleState.SKIPPED)
+        logger.error(
+            f"🛑 [JIT EXHAUSTED] Article '{article_id}' thất bại {tracker['retry_count']}/{JIT_MAX_RETRIES} lần. "
+            f"Lý do cuối: {reason}. Chuyển sang SKIPPED — bỏ hẳn."
+        )
+    else:
+        # Còn lượt retry → set cooldown 5 phút
+        tracker["cooldown_until"] = time.time() + JIT_COOLDOWN_SECONDS
+        _jit_fail_tracker[article_id] = tracker
+        
+        logger.warning(
+            f"⚠️ [JIT RETRY {tracker['retry_count']}/{JIT_MAX_RETRIES}] Article '{article_id}' thất bại. "
+            f"Lý do: {reason}. Cooldown {JIT_COOLDOWN_SECONDS // 60} phút rồi retry."
+        )
 
 async def run_platform_publisher_loop():
     """

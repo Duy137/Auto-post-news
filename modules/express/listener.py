@@ -92,22 +92,22 @@ class ExpressListener:
             # Bỏ qua các tin nhắn bình thường (spam, chitchat)
             return
             
-        logger.info(f"🚨 [EXPRESS EVENT] Detected Breaking News from Telegram!")
+        logger.debug(f"🚨 [EXPRESS EVENT] Detected Breaking News from Telegram!")
         
         # Phase 2: Express Hard Dedup (Hash Layer)
         is_duplicate = check_and_insert_express_seen(message_text)
         if is_duplicate:
-            logger.info(f"⚠️ [EXPRESS DEDUP] Blocked duplicate message (already seen in 24h).")
+            logger.debug(f"⚠️ [EXPRESS DEDUP] Blocked duplicate message (already seen in 24h).")
             return
             
-        logger.info(f"✅ [EXPRESS DEDUP] New unique message accepted!")
-        logger.info(f"--- RAW TEXT ---\n{message_text}\n----------------")
+        logger.debug(f"✅ [EXPRESS DEDUP] New unique message accepted!")
+        logger.debug(f"--- RAW TEXT ---\n{message_text[:100]}...\n----------------")
         
         # Phase 3: Keyword Score Filter
         is_passed, total_score, matched_keywords = score_express_message(message_text)
         
         if not is_passed:
-            logger.info("❌ [EXPRESS FILTER] Message ignored due to low score.")
+            logger.debug("❌ [EXPRESS FILTER] Message ignored due to low score.")
             return
             
         logger.info("✅ [EXPRESS FILTER] Message passed the score threshold! Proceeding...")
@@ -116,18 +116,18 @@ class ExpressListener:
         fingerprints = extract_fingerprints(message_text)
         
         if not fingerprints:
-            logger.info("ℹ️ [EXPRESS FINGERPRINT] No strong entities extracted.")
+            logger.debug("ℹ️ [EXPRESS FINGERPRINT] No strong entities extracted.")
             # Tạo Fallback Fingerprint từ Top 1-2 Keywords có điểm cao nhất
             sorted_keywords = sorted(matched_keywords.items(), key=lambda x: x[1], reverse=True)
             fallback_keywords = [k for k, v in sorted_keywords[:2] if k != 'has_exclamation']
             
             if fallback_keywords:
                  fingerprint_signature = "||".join(fallback_keywords)
-                 logger.info(f"ℹ️ [EXPRESS FINGERPRINT] Fallback signature generated: {fingerprint_signature}")
+                 logger.debug(f"ℹ️ [EXPRESS FINGERPRINT] Fallback signature generated: {fingerprint_signature}")
             else:
                  short_hash = hashlib.sha256(message_text.encode('utf-8')).hexdigest()[:8]
                  fingerprint_signature = f"fallback||{short_hash}"
-                 logger.info(f"ℹ️ [EXPRESS FINGERPRINT] Deterministic hash fallback used: {fingerprint_signature}")
+                 logger.debug(f"ℹ️ [EXPRESS FINGERPRINT] Deterministic hash fallback used: {fingerprint_signature}")
         else:
             fingerprint_signature = "||".join(fingerprints)
             
@@ -146,10 +146,10 @@ class ExpressListener:
         min_gap_sec = ORCHESTRATION_CONFIG.get("express_throttle_minutes", 3) * 60.0
         if time_since_last_publish < min_gap_sec:
             wait_time = min_gap_sec - time_since_last_publish
-            logger.info(f"⏳ [EXPRESS THROTTLE] Waiting {wait_time:.1f}s before processing to maintain gap...")
+            logger.debug(f"⏳ [EXPRESS THROTTLE] Waiting {wait_time:.1f}s before processing to maintain gap...")
             await asyncio.sleep(wait_time)
             
-        logger.info(f"✅ [EXPRESS PUBLISH PIPELINE] Fingerprint '{fingerprint_signature}' is clear! Preparing to publish...")
+        logger.debug(f"✅ [EXPRESS PUBLISH PIPELINE] Fingerprint '{fingerprint_signature}' is clear! Preparing to publish...")
             
         # Phase 6 & 8: LLM Summarize & Publish (With Delayed Retry)
         article_mock = {

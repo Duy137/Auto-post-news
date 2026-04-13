@@ -301,10 +301,33 @@ def rank_articles(articles: List[Article], current_ts: int = None) -> List[Artic
     # Lọc bỏ các bài bị Hard Reject (-999.0) khỏi danh sách để tránh lọt vào Selector
     articles = [a for a in articles if a.get("score", 0) > -500.0]
         
-    # [V4.7] Keyword logging has been removed
-        
-    # Sort DESC output (Tiện cho việc nhìn log)
+    # Sort DESC output
     articles.sort(key=lambda x: x["score"], reverse=True)
+    
+    # [V5.2] Scoreboard: Top 3 + Bottom 3 — dễ debug mà không ngập log
+    min_pub = SCORING_WEIGHTS.get("min_publish_score", 5.0)
+    if len(articles) > 0:
+        top3 = articles[:3]
+        bot3 = articles[-3:] if len(articles) > 3 else []
+        
+        scoreboard = f"\n{'='*70}\n📊 [SCOREBOARD] Top 3 bài cao nhất (min_publish_score={min_pub}):\n{'='*70}\n"
+        for i, a in enumerate(top3):
+            status = "🟢 PASS" if a["score"] >= min_pub else "🔴 FAIL"
+            d = a.get("score_detail", {})
+            scoreboard += (
+                f"  #{i+1} {status} | {a['score']:>7.2f} | {a['title'][:60]}\n"
+                f"     Kw+:{d.get('positive_keyword_score',0):+.1f} Penalty:{d.get('penalty_keyword_score',0):+.1f} "
+                f"Trend:{d.get('trend_bonus',0):+.1f} Decay:{d.get('editorial_score',0):.1f}→{a['score']:.2f}\n"
+            )
+        
+        if bot3 and bot3[0]["id"] != top3[-1]["id"]:
+            scoreboard += f"{'─'*70}\n📉 Bottom 3 bài thấp nhất:\n"
+            for a in bot3:
+                scoreboard += f"  🔴 {a['score']:>7.2f} | {a['title'][:60]}\n"
+        
+        scoreboard += f"{'='*70}\n📈 Tổng: {len(articles)} bài | Pass: {sum(1 for a in articles if a['score'] >= min_pub)} | Fail: {sum(1 for a in articles if a['score'] < min_pub)}\n"
+        logger.info(scoreboard)
+    
     return articles
 
 if __name__ == "__main__":

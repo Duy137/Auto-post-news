@@ -126,7 +126,7 @@ RSS_SOURCES: List[RssSource] = [
         "id": "coindesk",
         "name": "CoinDesk",
         "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
-        "credibility_score": 1.2,
+        "credibility_score": 1.1,
         "latency_advantage_score": 1.15
     },
     {
@@ -262,7 +262,20 @@ SCORING_WEIGHTS: ScoringWeights = {
             "cup and handle", "on track to", "set to", "poised to", "targeting", "toward $", "could hit", "will hit", "can reach",
             "growth", "prospects", "valuation", "test", "loses", "retiree", "individual", "consumer", "retail", "opinion", "editorial", "sentiment", "expert scam",
             "stuck at", "hovers", "reclaims", "targets", "to $", "at $", "predicts", "outlook", "forecast", "expert warns", "won't hold", "falls toward",
-            "what to expect", "happens next", "what happens", "brewing", "shorting", "trapped"
+            "what to expect", "happens next", "what happens", "brewing", "shorting", "trapped",
+            # [V5.2] TA/Chart Patterns — chặn bài phân tích kỹ thuật
+            "golden cross", "death cross", "reversal", "reversal pattern",
+            "funding rate", "funding rates", "open interest",
+            "long liquidation", "short liquidation", "liquidation", "liquidations",
+            # [V5.2] Sentiment/FUD/FOMO — chặn bài cảm xúc thị trường
+            "FUD", "FOMO", "fear and greed", "greed index", "fear index",
+            # [V5.2] Flow/Whale — chặn bài theo dõi dòng tiền không có tin tức cụ thể
+            "inflow", "outflow", "whale alert", "whale", "whales",
+            "drawing attention", "all eyes on", "eyes on",
+            # [V5.2] Editorial/Opinion markers — chặn bài ý kiến cá nhân
+            "one big question", "raises question", "big question",
+            "last laugh", "delusional",
+            "facing extreme", "extreme levels"
         ],
         "business_development": [
             "funding", "investment", "invest", "invests", "invested", "raises", "raise", "raising", "venture funding", "series a", "series b", "series c",
@@ -320,15 +333,17 @@ SCORING_WEIGHTS: ScoringWeights = {
     "contextual_penalty_multiplier": 0.5, # Giảm mức phạt của rổ giá cả xuống còn 30% (tức phạt nhẹ đi) nếu bài có đi kèm tin vĩ mô/tin thị trường
     "penalty_exempt_categories": ["market_moving", "macro_politics"], # Các rổ miễn trừ phạt
     
-    # [NEW V4.5] Điểm thưởng thực thể cộng dồn độc lập
+    # [V5.2] Điểm thưởng thực thể — giảm major_tokens từ 3.0→2.0
+    # Lý do: Base(3.0) + Entity(3.0) = 6.0 vượt ngưỡng 5.0 mà không cần nội dung giá trị.
+    # Với 2.0: Base(3.0) + Entity(2.0) = 5.0 → cần ít nhất 1 keyword tích cực mới lên top.
     "entity_bonuses": {
-        "major_tokens": 3.0,
+        "major_tokens": 2.0,
         "major_exchanges": 2.0,
         "macro_entities": 1.0
     },
     
     # [NEW V4.5] Ngưỡng điểm sàn tối thiểu để được quyền đăng bài
-    "min_publish_score": 5.0, # Mặc định base_score + 2
+    "min_publish_score": 5.5, # Mặc định base_score + 2
     
     # [NEW V4.4] Phân hạng tài sản chống Spam SEO
     "noise_tokens": ["bitcoin", "btc", "ethereum", "eth"],
@@ -364,8 +379,8 @@ LLM_CONFIG = {
     },
     
     "lane_models": {
-        "RSS": ["gemini-2.5-flash", "gemma-3-27b-it"],        # Fallback hierarchy for RSS
-        "EXPRESS": ["gemma-3-27b-it"]                         # Fixed model for Express
+        "RSS": ["gemini-2.5-flash", "gpt-4o-mini"],  # Cross-provider: Gemini → Gemma → OpenAI
+        "EXPRESS": ["gemma-3-27b-it"]                                   # Fixed model for Express
     },
     
     "lane_timeouts": {
