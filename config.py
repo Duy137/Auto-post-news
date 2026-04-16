@@ -24,7 +24,7 @@ def _reload_orchestration():
     # Per-platform timing — NGUỒN DUY NHẤT cho default values
     ORCHESTRATION_CONFIG["platform_timing"]["telegram"] = {
         "mode": os.environ.get("TG_PUBLISH_MODE", "gap"),
-        "min_gap_hours": float(os.environ.get("TG_MIN_GAP_HOURS", "4")),
+        "min_gap_hours": float(os.environ.get("TG_MIN_GAP_HOURS", "1")),
         "gap_channel_id": os.environ.get("TG_GAP_CHANNEL_ID", ""),
         "schedule": [t.strip() for t in os.environ.get("TG_SCHEDULE", "07:00,11:00,15:00,18:00,21:00,00:00").split(",") if t.strip()],
         "interval_hours": float(os.environ.get("TG_INTERVAL_HOURS", "4")),
