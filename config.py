@@ -368,7 +368,7 @@ _gemini_keys = [k for k in [os.environ.get(f"GEMINI_API_KEY_{i}") for i in range
 
 LLM_CONFIG = {
     # Chọn nhà cung cấp: "openai" hoặc "gemini"
-    "active_provider": os.environ.get("LLM_PROVIDER", "gemini").lower(),
+    "active_provider": os.environ.get("LLM_PROVIDER", "openai").lower(),
     
     "openai": {
         "api_keys": _openai_keys if _openai_keys else ["dummy_key_for_test"],
@@ -379,7 +379,8 @@ LLM_CONFIG = {
     },
     
     "lane_models": {
-        "RSS": ["gemini-2.5-flash", "gpt-4o-mini"],  # Cross-provider: Gemini → Gemma → OpenAI
+        "RSS": ["gpt-4o-mini"],  # Cross-provider: OpenAI -> Gemini
+        "RSS": ["gemini-2.5-flash"],  # Cross-provider: OpenAI -> Gemini
         "EXPRESS": ["gemma-3-27b-it"]                                   # Fixed model for Express
     },
     
