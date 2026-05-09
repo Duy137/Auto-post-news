@@ -74,14 +74,16 @@ Ngay từ đầu, định hướng của team là xây dựng một cộng đồ
 
 3️⃣ BotTradeAlts: <a href="https://t.me/+J9I-VAXj4IQxNjY1">Link Bot</a> | <a href="https://t.me/c/3116134681/408">Hướng dẫn sử dụng</a>
 
-4️⃣ Website: <a href="https://cryptovn101.com/">cryptovn101.com</a>
+4️⃣ BotHold: <a href="https://t.me/CryptoVN101DanhMuc">Link Bot</a> | <a href="https://t.me/CryptoVN101/2325">Hướng dẫn sử dụng</a>
+
+5️⃣ Website: <a href="https://cryptovn101.com/">cryptovn101.com</a>
 Nơi tổng hợp hệ thống sách, tài liệu và kiến thức nền tảng về:
 • Vĩ mô & chu kỳ thị trường
 • Crypto & blockchain
 • Đầu tư – giao dịch
 • Quản trị vốn & tâm lý đầu tư
 
-5️⃣ CHƯƠNG TRÌNH ĐẠI SỨ CRYPTOVN 101 – SHARED SUCCESS <a href="https://t.me/c/3116134681/473">[Link]</a>
+6️⃣ CHƯƠNG TRÌNH ĐẠI SỨ CRYPTOVN 101 – SHARED SUCCESS <a href="https://t.me/c/3116134681/473">[Link]</a>
 
 👉 <a href="https://t.me/c/3116134681/6">Cách tham gia nhóm chat</a>
 
