@@ -68,7 +68,7 @@ Ngay từ đầu, định hướng của team là xây dựng một cộng đồ
 📌 Trọng tâm phát triển của CryptoVN 101 bao gồm ba mũi nhọn chính: giáo dục tài sản số, tư vấn chiến lược đầu tư và giao dịch tự động hoá.
 
 🚀 Các sản phẩm hiện tại của CryptoVN 101
-1️⃣ Bot DojiScan: <a href="https://t.me/+7CjHpATnmxk5MWVl">Link Bot</a> | <a href="https://t.me/c/3116134681/149">Hướng dẫn sử dụng</a>
+1️⃣ Bot Market Flow Signals: <a href="https://t.me/+7CjHpATnmxk5MWVl">Link Bot</a> | <a href="https://t.me/c/3116134681/149">Hướng dẫn sử dụng</a>
 
 2️⃣ BotTradeBTC: <a href="https://t.me/+P0uEo1OsvVkyMzA1">Link Bot</a> | <a href="https://t.me/c/3116134681/369">Hướng dẫn sử dụng</a>
 
