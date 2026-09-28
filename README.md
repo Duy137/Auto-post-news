@@ -1,6 +1,7 @@
 # ⚡ Autonomous AI News Engine (V5.2 / V2)
 ### *Production-Grade, Dual-Lane Real-Time News Curation with Just-In-Time (JIT) LLM Synthesis*
 
+[![CI](https://github.com/Duy137/Auto-post-news/actions/workflows/ci.yml/badge.svg)](https://github.com/Duy137/Auto-post-news/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Architecture](https://img.shields.io/badge/Architecture-Dual--Lane%20Decoupled-orange.svg?style=flat-square)](#-system-architecture)
 [![LLM](https://img.shields.io/badge/LLM-OpenAI%20%7C%20Gemini%202.5%20%7C%20Gemma%2027B-green.svg?style=flat-square&logo=openai)](https://platform.openai.com/)
